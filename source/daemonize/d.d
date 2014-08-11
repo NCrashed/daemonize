@@ -6,11 +6,18 @@
 */
 module daemonize.d;
 
+public
+{
+    import dlogg.log;
+    import daemonize.daemon;
+    import daemonize.keymap;
+}
+
 version(Windows)
 {
     public import daemonize.windows;
 }
-else version(Linux)
+else version(linux)
 {
     public import daemonize.linux;
 }
