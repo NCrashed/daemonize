@@ -4,6 +4,21 @@
 	"copyright": "Copyright © 2014, Anton Gushcha",
 	"authors": ["NCrashed <ncrashed@gmail.com>"],
 	"license": "MIT",
-	"dependencies" : {
-	}
+	"configurations": [
+		{
+			"name": "default",
+			"dependencies" : {
+				"dlogg": ">=0.3.2" 
+			}
+		},
+		{
+			"name": "colorized",
+			"dependencies" : {
+				"dlogg": ">=0.3.2"
+			},
+			"subConfigurations" : {
+				"dlogg": "colorized"
+			}
+		}
+	]
 }
