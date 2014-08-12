@@ -109,5 +109,7 @@ index:
     signal_id = NumberOfCustomSignalInDescription + SIGRTMIN (or __libc_current_sigrtmin)
 ```
 
+`NumberOfCustomSignalInDescription` - counts only custom signals, native ones are skipped.
+
 In Windows you simply creates event with `CreateEvent` with signal name that you used with `customSignal` and
 raises it on demand.
