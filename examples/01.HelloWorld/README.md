@@ -19,7 +19,7 @@ one place:
 ```D
 alias daemon = Daemon!(
 ```
-Firts goes daemon name, it's very important to choose unique name as the name is used as pid/lock
+First goes daemon name, it's very important to choose unique name as the name is used as pid/lock
 file names (in linux if you don't specify your own paths) and as a service name in Windows. 
 Daemonize prevents from running duplicating daemons (in linux you can change lock & pid file paths to
 override the behavior):
@@ -75,7 +75,7 @@ As soon as main delegate returns, the daemon terminates. At the example the daem
 
 Pid and lock files
 ==================
-By default daemonize creates pid and lock files at `"~/.daemonize/$(daemon_name)[.pid,.lock]` (or "%appdata%/.daemonize/%daemon_name%[.pid,.lock]" for Windows).
+By default daemonize creates pid and lock files at `"~/.daemonize/$(daemon_name)[.pid,.lock]"` (or `"%appdata%/.daemonize/%daemon_name%[.pid,.lock]"` for Windows).
 To change the behavior you can pass the paths into `runDaemon` function.
 
 Privileges lowing
