@@ -208,7 +208,7 @@ unittest
 template staticRobin(SF...)
 {
     // Calculating minimum length of all ExpressionLists
-    private template minimum(T...)
+    private static template minimum(T...)
     {
         enum length = T[1].expand.length;
         enum minimum = T[0] > length ? length : T[0];
@@ -216,14 +216,25 @@ template staticRobin(SF...)
     
     enum minLength = staticFold!(minimum, size_t.max, SF);
     
-    private template robin(ulong i)
+    private static template robin(ulong i)
     {        
         private template takeByIndex(alias T)
         {
             static if(is(T.expand[i]))
                 alias takeByIndex = T.expand[i];
             else
-                enum takeByIndex = T.expand[i];
+            {
+                // hack to avoid compile-time lambdas
+                // see http://forum.dlang.org/thread/lkl0lp$204h$1@digitalmars.com
+                static if(__traits(compiles, {enum innerFind = T[1];}))
+                {
+                    enum takeByIndex = T.expand[i];
+                }
+                else
+                {
+                    alias takeByIndex = T.expand[i];
+                }
+            }
         }
         
         static if(i >= minLength)

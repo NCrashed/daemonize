@@ -8,6 +8,8 @@ module daemonize.linux;
 
 version(linux):
 
+static if( __VERSION__ < 2066 ) private enum nogc;
+
 import std.conv;
 import std.exception;
 import std.file;
@@ -25,28 +27,84 @@ import daemonize.string;
 import daemonize.keymap;
 import dlogg.log;
 
+/// Returns local pid file that is used when no custom one is specified
+string defaultPidFile(string daemonName)
+{
+    return expandTilde(buildPath("~", ".daemonize", daemonName ~ ".pid"));  
+}
+
+/// Returns local lock file that is used when no custom one is specified
+string defaultLockFile(string daemonName)
+{
+    return expandTilde(buildPath("~", ".daemonize", daemonName ~ ".lock"));  
+}
+
+/// Checks is $(B sig) is actually built-in
+@safe @nogc bool isNativeSignal(Signal sig) pure nothrow 
+{
+    switch(sig)
+    {
+        case(Signal.Abort):     return true;
+        case(Signal.HangUp):    return true;
+        case(Signal.Interrupt): return true;
+        case(Signal.Quit):      return true;
+        case(Signal.Terminate): return true;
+        default: return false;
+    }
+}
+
+/// Checks is $(B sig) is not actually built-in
+@safe @nogc bool isCustomSignal(Signal sig) pure nothrow 
+{
+    return !isNativeSignal(sig);
+}
+
+void sendSignalDynamic(alias DaemonInfo)(string daemonName, Signal signal, string pidFilePath = "")
+    if(isDaemon!DaemonInfo)
+{
+    // Try to find at default place
+    if(pidFilePath == "")
+    {
+        pidFilePath = defaultPidFile(daemonName);
+    }
+    
+    // Reading file
+    int pid = readPidFile(pidFilePath);
+    
+    kill(pid, readDaemonInfo!DaemonInfo.mapSignal(signal));
+}
+
+/// ditto
+void sendSignal(alias DaemonInfo)(Signal signal, string pidFilePath = "")
+    if(isDaemon!DaemonInfo)
+{
+    sendSignalDynamic!DaemonInfo(DaemonInfo.daemonName, signal, pidFilePath);
+}
+
 template runDaemon(alias DaemonInfo)
     if(isDaemon!DaemonInfo)
 {
+    alias daemon = readDaemonInfo!DaemonInfo;
+    
     int runDaemon(shared ILogger logger, int delegate() main
         , string pidFilePath = "", string lockFilePath = ""
         , int userId = -1, int groupId = -1)
-    {
-        savedLogger = logger;
-        savedPidFilePath = pidFilePath;
-        savedLockFilePath = lockFilePath;
-        
+    {        
         // Local locak file
         if(lockFilePath == "")
         {
-            lockFilePath = expandTilde(buildPath("~", ".daemonize", DaemonInfo.daemonName ~ ".lock"));  
+            lockFilePath = defaultLockFile(DaemonInfo.daemonName);  
         }
         
         // Local pid file
         if(pidFilePath == "")
         {
-            pidFilePath = expandTilde(buildPath("~", ".daemonize", DaemonInfo.daemonName ~ ".pid"));  
+            pidFilePath = defaultPidFile(DaemonInfo.daemonName);
         }
+        
+        savedLogger = logger;
+        savedPidFilePath = pidFilePath;
+        savedLockFilePath = lockFilePath;
         
         // Handling lockfile if any
         enforceLockFile(lockFilePath, userId);
@@ -117,10 +175,10 @@ template runDaemon(alias DaemonInfo)
         bindSignal(SIGQUIT, &signal_handler_daemon);
         bindSignal(SIGHUP, &signal_handler_daemon);
         
-        assert(canFitRealtimeSignals, "Cannot fit all custom signals to real-time signals range!");
-        foreach(signame; customSignals.keys)
+        assert(daemon.canFitRealtimeSignals, "Cannot fit all custom signals to real-time signals range!");
+        foreach(signame; daemon.customSignals.keys)
         {
-            bindSignal(mapRealTimeSignal(signame), &signal_handler_daemon);
+            bindSignal(daemon.mapRealTimeSignal(signame), &signal_handler_daemon);
         }
 
         int code = EXIT_FAILURE;
@@ -158,90 +216,33 @@ template runDaemon(alias DaemonInfo)
         return 0;
     }
     
-    /// Checks is $(B sig) is actually built-in
-    @safe @nogc bool isNativeSignal(Signal sig) pure nothrow 
-    {
-        switch(sig)
-        {
-            case(Signal.Abort):     return true;
-            case(Signal.HangUp):    return true;
-            case(Signal.Interrupt): return true;
-            case(Signal.Quit):      return true;
-            case(Signal.Terminate): return true;
-            default: return false;
-        }
-    }
-    
-    /// Checks is $(B sig) is not actually built-in
-    bool isCustomSignal(Signal sig)
-    {
-        return !isNativeSignal(sig);
-    }
-        
     private
     {   
         shared ILogger savedLogger;
         string savedPidFilePath;
         string savedLockFilePath;
         
-        alias customSignals = DaemonInfo.signalMap.filterByKey!isCustomSignal;
-         
-        /** 
-        *   Checks if all not native signals can be binded 
-        *   to real-time signals.
-        */
-        bool canFitRealtimeSignals()
-        {
-            return customSignals.length <= __libc_current_sigrtmax - __libc_current_sigrtmin;
-        }
-        
-        /// Converts platform independent signal to native
-        @safe int mapSignal(Signal sig) pure nothrow 
-        {
-            switch(sig)
-            {
-                case(Signal.Abort):     return SIGABRT;
-                case(Signal.HangUp):    return SIGHUP;
-                case(Signal.Interrupt): return SIGINT;
-                case(Signal.Quit):      return SIGQUIT;
-                case(Signal.Terminate): return SIGTERM;
-                default: return mapRealTimeSignal(sig);                    
-            }
-        }
-        
-        /// Converting custom signal to real-time signal
-        @safe int mapRealTimeSignal(Signal sig) pure nothrow 
-        {
-            assert(!isNativeSignal(sig));
-            
-            int counter = 0;
-            foreach(key; customSignals.keys)
-            {                
-                if(sig == key) return counter;
-                else counter++;
-            }
-            
-            assert(false, "Parameter signal not in daemon description!");
-        }
-        
         /// Actual signal handler
         extern(C) void signal_handler_daemon(int sig) nothrow
         {
             foreach(key; DaemonInfo.signalMap.keys)
             {
-                if(mapSignal(key) == sig)
+                if(daemon.mapSignal(key) == sig)
                 {
-                    if(!DaemonInfo.signalMap.get!key(savedLogger))
+                    try
                     {
-                        try
+                        if(!DaemonInfo.signalMap.get!key(savedLogger))
                         {
                             deleteLockFile(savedLockFilePath);
                             deletePidFile(savedPidFilePath);
-                        } catch(Throwable th) {}
-                        
-                        terminate(EXIT_SUCCESS);
-                    } 
-                    else return;
+                            
+                            terminate(EXIT_SUCCESS);
+                        } 
+                        else return;
+                    } catch(Throwable th) 
+                    {
+                        savedLogger.logError(text("Caught at signal handler: ", th));
+                    }
                 }
              }
         }
@@ -374,7 +375,7 @@ template runDaemon(alias DaemonInfo)
         {
             if(isDaemon)
             {
-                savedLogger.logError("Daemon is terminating with code: " ~ to!string(code));
+                savedLogger.logInfo("Daemon is terminating with code: " ~ to!string(code));
                 savedLogger.finalize();
             
                 gc_term();
@@ -413,5 +414,57 @@ private
         alias void function(int) sighandler_t;
         sighandler_t signal(int signum, sighandler_t handler);
         char* strerror(int errnum) pure;
+    }
+    
+    int readPidFile(string filename)
+    {
+        enforce(filename.exists, "Cannot find pid file at '" ~ filename ~ "'!");
+        
+        auto file = File(filename, "r");
+        return file.readln.to!int;
+    }
+    
+    template readDaemonInfo(alias DaemonInfo)
+        if(isDaemon!DaemonInfo)
+    {
+        alias customSignals = DaemonInfo.signalMap.filterByKey!isCustomSignal;
+         
+        /** 
+        *   Checks if all not native signals can be binded 
+        *   to real-time signals.
+        */
+        bool canFitRealtimeSignals()
+        {
+            return customSignals.length <= __libc_current_sigrtmax - __libc_current_sigrtmin;
+        }
+        
+        /// Converts platform independent signal to native
+        @safe int mapSignal(Signal sig) nothrow 
+        {
+            switch(sig)
+            {
+                case(Signal.Abort):     return SIGABRT;
+                case(Signal.HangUp):    return SIGHUP;
+                case(Signal.Interrupt): return SIGINT;
+                case(Signal.Quit):      return SIGQUIT;
+                case(Signal.Terminate): return SIGTERM;
+                default: return mapRealTimeSignal(sig);                    
+            }
+        }
+        
+        /// Converting custom signal to real-time signal
+        @trusted int mapRealTimeSignal(Signal sig) nothrow 
+        {
+            assert(!isNativeSignal(sig));
+            
+            int counter = 0;
+            foreach(key; customSignals.keys)
+            {                
+                if(sig == key) return counter + __libc_current_sigrtmin;
+                else counter++;
+            }
+            
+            assert(false, "Parameter signal not in daemon description!");
+        }
     }
 }
