@@ -1,0 +1,25 @@
+{
+	"name" : "daemonize-example-02-interfacing",
+	"copyright": "© 2014 Anton Gushcha",
+	"description" : "Shows integrated client for signaling to daemons.",
+	"license": "MIT",
+	"authors": ["Anton Gushcha (NCrashed) <ncrashed@gmail.com>"],
+	"dependencies" : {
+		"daemonize": {"version": "~master", "path": "../.."}  
+	},
+	"subConfigurations": {
+		"daemonize": "colorized"
+	},
+	"configurations": [
+		{
+			"name": "daemon",
+			"targetType": "executable",
+			"versions": ["DaemonServer"]
+		},
+		{
+			"name": "client",
+			"targetType": "executable",
+			"versions": ["DaemonClient"]
+		}	
+	]
+}
