@@ -28,16 +28,29 @@ import dlogg.log;
 template runDaemon(alias DaemonInfo)
     if(isDaemon!DaemonInfo)
 {
-    int runDaemon(shared ILogger logger, int delegate(shared ILogger) main)
+    int runDaemon(shared ILogger logger, int delegate() main
+        , string pidFilePath = "", string lockFilePath = ""
+        , int userId = -1, int groupId = -1)
     {
         savedLogger = logger;
+        savedPidFilePath = pidFilePath;
+        savedLockFilePath = lockFilePath;
+        
+        // Local locak file
+        if(lockFilePath == "")
+        {
+            lockFilePath = expandTilde(buildPath("~", ".daemonize", DaemonInfo.daemonName ~ ".lock"));  
+        }
+        
+        // Local pid file
+        if(pidFilePath == "")
+        {
+            pidFilePath = expandTilde(buildPath("~", ".daemonize", DaemonInfo.daemonName ~ ".pid"));  
+        }
         
         // Handling lockfile if any
-        static if(DaemonInfo.hasLockFile)
-        {
-            enforceLockFile(DaemonInfo.lockFilePath, DaemonInfo.userId);
-            scope(exit) deleteLockFile(DaemonInfo.lockFilePath);
-        }
+        enforceLockFile(lockFilePath, userId);
+        scope(exit) deleteLockFile(lockFilePath);
         
         // Saving process ID and session ID
         pid_t pid, sid;
@@ -49,8 +62,7 @@ template runDaemon(alias DaemonInfo)
             savedLogger.logError("Failed to start daemon: fork failed");
             
             // Deleting fresh lockfile
-            static if(DaemonInfo.hasLockFile)
-                deleteLockFile(DaemonInfo.lockFilePath);
+            deleteLockFile(lockFilePath);
                 
             terminate(EXIT_FAILURE);
         }
@@ -58,37 +70,29 @@ template runDaemon(alias DaemonInfo)
         // If we got good PID, then we can exit the parent process
         if(pid > 0)
         {
-            savedLogger.logInfo(text("Daemon detached with pid ", pid));
-            
             // handling pidfile if any
-            static if(DaemonInfo.hasPidFile)
-            {
-                writePidFile(DaemonInfo.pidFilePath, pid, DaemonInfo.userId);
-            }   
+            writePidFile(pidFilePath, pid, userId);
+
+            savedLogger.logInfo(text("Daemon is detached with pid ", pid));
             terminate(EXIT_SUCCESS, false);
         }
         
         // dropping root privileges
-        dropRootPrivileges(DaemonInfo.groupId, DaemonInfo.userId);
+        dropRootPrivileges(groupId, userId);
         
         // Change the file mode mask and suppress printing to console
         umask(0);
         savedLogger.minOutputLevel(LoggingLevel.Muted);
         
         // Handling of deleting pid file
-        static if(DaemonInfo.hasPidFile)
-        {
-           scope(exit) deletePidFile(DaemonInfo.pidFilePath);
-        }  
+        scope(exit) deletePidFile(pidFilePath);
         
         // Create a new SID for the child process
         sid = setsid();
         if (sid < 0)
         {
-            static if(DaemonInfo.hasLockFile)
-                deleteLockFile(DaemonInfo.lockFilePath);
-            static if(DaemonInfo.hasPidFile)
-                deletePidFile(DaemonInfo.pidFilePath);
+            deleteLockFile(lockFilePath);
+            deletePidFile(pidFilePath);
                 
             terminate(EXIT_FAILURE);
         }
@@ -122,7 +126,7 @@ template runDaemon(alias DaemonInfo)
         int code = EXIT_FAILURE;
         debug
         {
-            try code = main(savedLogger);
+            try code = main();
             catch (Throwable ex) 
             {
                 savedLogger.logError(text("Catched unhandled throwable in daemon level: ", ex.msg));
@@ -130,16 +134,14 @@ template runDaemon(alias DaemonInfo)
             } 
             finally 
             {
-                static if(DaemonInfo.hasLockFile)
-                    deleteLockFile(DaemonInfo.lockFilePath);
-                static if(DaemonInfo.hasPidFile)
-                    deletePidFile(DaemonInfo.pidFilePath);
+                deleteLockFile(lockFilePath);
+                deletePidFile(pidFilePath);
                 terminate(code);
             }
         }
         else
         {
-            try code = main(savedLogger);
+            try code = main();
             catch (Exception ex) 
             {
                 savedLogger.logError(text("Catched unhandled exception in daemon level: ", ex.msg));
@@ -147,10 +149,8 @@ template runDaemon(alias DaemonInfo)
             } 
             finally 
             {
-                static if(DaemonInfo.hasLockFile)
-                    deleteLockFile(DaemonInfo.lockFilePath);
-                static if(DaemonInfo.hasPidFile)
-                    deletePidFile(DaemonInfo.pidFilePath);
+                deleteLockFile(lockFilePath);
+                deletePidFile(pidFilePath);
                 terminate(code);
             }
         }
@@ -181,6 +181,8 @@ template runDaemon(alias DaemonInfo)
     private
     {   
         shared ILogger savedLogger;
+        string savedPidFilePath;
+        string savedLockFilePath;
         
         alias customSignals = DaemonInfo.signalMap.filterByKey!isCustomSignal;
          
@@ -231,10 +233,12 @@ template runDaemon(alias DaemonInfo)
                 {
                     if(!DaemonInfo.signalMap.get!key(savedLogger))
                     {
-                        static if(DaemonInfo.hasLockFile)
-                            deleteLockFile(DaemonInfo.lockFilePath);
-                        static if(DaemonInfo.hasPidFile)
-                            deletePidFile(DaemonInfo.pidFilePath);
+                        try
+                        {
+                            deleteLockFile(savedLockFilePath);
+                            deletePidFile(savedPidFilePath);
+                        } catch(Throwable th) {}
+                        
                         terminate(EXIT_SUCCESS);
                     } 
                     else return;

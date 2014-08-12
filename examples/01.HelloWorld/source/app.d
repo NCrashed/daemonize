@@ -17,7 +17,7 @@ alias daemon = Daemon!(
     
     // Setting associative map signal -> callbacks
     KeyValueList!(
-        Signal.Terminate, (logger) 
+        Signal.Terminate, (logger)
         {
             logger.logInfo("Exiting...");
             return false; // returning false will terminate daemon
@@ -35,8 +35,7 @@ int main()
     auto logger = new shared StrictLogger("logfile.log");
     return runDaemon!daemon(logger, 
         // Main function where your code is
-        delegate(shared ILogger logger) 
-        {
+        () {
             // will stop the daemon in 5 minutes
             auto time = Clock.currSystemTick;
             while(time + cast(TickDuration)5.dur!"minutes" > Clock.currSystemTick) {}
