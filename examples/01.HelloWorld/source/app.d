@@ -13,7 +13,7 @@ import daemonize.d;
 
 // First you need to describe your daemon via template
 alias daemon = Daemon!(
-    "MyDaemonName", // unique name
+    "DaemonizeExample1", // unique name
     
     // Setting associative map signal -> callbacks
     KeyValueList!(
