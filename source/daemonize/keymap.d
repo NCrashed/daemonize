@@ -226,7 +226,7 @@ template staticRobin(SF...)
             {
                 // hack to avoid compile-time lambdas
                 // see http://forum.dlang.org/thread/lkl0lp$204h$1@digitalmars.com
-                static if(__traits(compiles, {enum innerFind = T[1];}))
+                static if(__traits(compiles, {enum takeByIndex = T.expand[i];}))
                 {
                     enum takeByIndex = T.expand[i];
                 }
@@ -436,7 +436,7 @@ template KeyValueList(Pairs...)
     {
         private alias newKeys = staticFilter!(F, keys);
         private alias newValues = staticMap!(get, newKeys);
-        alias filterByKey = KeyValueList!(staticRobin!(StrictExpressionList!(newKeys, newValues)));
+        alias filterByKey = KeyValueList!(staticRobin!(StrictExpressionList!newKeys, StrictExpressionList!newValues));
     }
 }
 ///

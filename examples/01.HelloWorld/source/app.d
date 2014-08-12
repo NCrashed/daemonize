@@ -1,6 +1,14 @@
 // This file is written in D programming language
 /**
-*   Copyright: © 2013-2014 Anton Gushcha
+*   The example demonstrates basic daemonize features. Described
+*   daemon responds to SIGTERM and SIGHUP signals.
+*   
+*   If SIGTERM is received, daemon terminates. If SIGHUP is received,
+*   daemon prints "Hello World!" message to logg.
+*
+*   Daemon will auto-terminate after 5 minutes of running.
+*
+*   Copyright: © 2014 Anton Gushcha
 *   License: Subject to the terms of the MIT license, as written in the included LICENSE file.
 *   Authors: NCrashed <ncrashed@gmail.com>
 */

@@ -1,5 +1,11 @@
 // This file is written in D programming language
 /**
+*   Daemon implementation for GNU/Linux platform.
+*
+*   The main symbols you might be interested in:
+*   * $(B sendSignalDynamic) and $(B endSignal) - is easy way to send signals to created daemons
+*   * $(B runDaemon) - forks daemon process and places hooks that are described by $(B Daemon) template
+*
 *   Copyright: © 2013-2014 Anton Gushcha
 *   License: Subject to the terms of the MIT license, as written in the included LICENSE file.
 *   Authors: NCrashed <ncrashed@gmail.com>
@@ -59,8 +65,23 @@ string defaultLockFile(string daemonName)
     return !isNativeSignal(sig);
 }
 
+/**
+*   As custom signals are mapped to realtime signals at runtime, it is complicated
+*   to calculate signal number by hands. The function simplifies sending signals
+*   to daemons that were created by the package.
+*
+*   The $(B DaemonInfo) could be a full description of desired daemon or simplified one
+*   (template ($B DaemonClient). That info is used to remap custom signals to realtime ones.
+*
+*   $(B daemonName) is passed as runtime parameter to be able read service name at runtime.
+*   $(B signal) is the signal that you want to send. $(B pidFilePath) is optional parameter
+*   that overrides default algorithm of finding pid files (calculated from $(B daemonName) in form
+*   of '~/.daemonize/<daemonName>.pid').   
+*
+*   See_Also: $(B sendSignal) version of the function that takes daemon name from $(B DaemonInfo). 
+*/
 void sendSignalDynamic(alias DaemonInfo)(string daemonName, Signal signal, string pidFilePath = "")
-    if(isDaemon!DaemonInfo)
+    if(isDaemon!DaemonInfo || isDaemonClient!DaemonInfo)
 {
     // Try to find at default place
     if(pidFilePath == "")
@@ -76,11 +97,45 @@ void sendSignalDynamic(alias DaemonInfo)(string daemonName, Signal signal, strin
 
 /// ditto
 void sendSignal(alias DaemonInfo)(Signal signal, string pidFilePath = "")
-    if(isDaemon!DaemonInfo)
+    if(isDaemon!DaemonInfo || isDaemonClient!DaemonInfo)
 {
     sendSignalDynamic!DaemonInfo(DaemonInfo.daemonName, signal, pidFilePath);
 }
 
+/**
+*   Main template in the module that actually creates daemon process.
+*   $(B DaemonInfo) is a $(B Daemon) instance that holds name of the daemon
+*   and hooks for numerous $(B Signal)s.
+*
+*   Daemon is detached from terminal, therefore it needs a preinitialized $(B logger).
+*
+*   As soon as daemon is ready the function executes $(B main) delegate that returns
+*   application return code. 
+*
+*   Daemon uses pid and lock files. Pid file holds process id for communications with
+*   other applications. If $(B pidFilePath) isn't set, the default path to pid file is 
+*   '~/.daemonize/<daemonName>.pid'. Lock file prevents from execution of numerous copies
+*   of daemons. If $(B lockFilePath) isn't set, the default path to lock file is
+*   '~/.daemonize/<daemonName>.lock'. If you want several instances of one daemon, redefine
+*   pid and lock files paths.
+*
+*   Sometimes lock and pid files are located at `/var/run` directory and needs a root access.
+*   If $(B userId) and $(B groupId) parameters are set, daemon tries to create lock and pid files
+*   and drops root privileges.
+*
+*   Example:
+*   ---------
+*   return runDaemon!daemon(logger, 
+*       // Main function where your code is
+*       () {
+*           // will stop the daemon in 5 minutes
+*           auto time = Clock.currSystemTick;
+*           while(time + cast(TickDuration)5.dur!"minutes" > Clock.currSystemTick) {}
+*           logger.logInfo("Timeout. Exiting");
+*           return 0;
+*       }); 
+*   ---------
+*/
 template runDaemon(alias DaemonInfo)
     if(isDaemon!DaemonInfo)
 {
@@ -416,6 +471,7 @@ private
         char* strerror(int errnum) pure;
     }
     
+    /// Tries to read a number from $(B filename)
     int readPidFile(string filename)
     {
         enforce(filename.exists, "Cannot find pid file at '" ~ filename ~ "'!");
@@ -424,11 +480,18 @@ private
         return file.readln.to!int;
     }
     
+    /// Handles utilities for signal mapping from local representation to GNU/Linux one
     template readDaemonInfo(alias DaemonInfo)
-        if(isDaemon!DaemonInfo)
+        if(isDaemon!DaemonInfo || isDaemonClient!DaemonInfo)
     {
-        alias customSignals = DaemonInfo.signalMap.filterByKey!isCustomSignal;
-         
+        static if(isDaemon!DaemonInfo)
+        {
+            alias customSignals = DaemonInfo.signalMap.filterByKey!isCustomSignal;
+        } else
+        { 
+            alias customSignals = staticFilter!(isCustomSignal, DaemonInfo.signals);
+        }
+        
         /** 
         *   Checks if all not native signals can be binded 
         *   to real-time signals.
@@ -457,8 +520,13 @@ private
         {
             assert(!isNativeSignal(sig));
             
+            static if(isDaemonClient!DaemonInfo)
+                alias keys = customSignals;
+            else
+                alias keys = customSignals.keys;
+                
             int counter = 0;
-            foreach(key; customSignals.keys)
+            foreach(key; keys)
             {                
                 if(sig == key) return counter + __libc_current_sigrtmin;
                 else counter++;
