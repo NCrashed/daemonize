@@ -25,7 +25,7 @@ alias daemon = Daemon!(
     
     // Setting associative map signal -> callbacks
     KeyValueList!(
-        Signal.Terminate, (logger)
+        Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown), (logger, signal)
         {
             logger.logInfo("Exiting...");
             return false; // returning false will terminate daemon

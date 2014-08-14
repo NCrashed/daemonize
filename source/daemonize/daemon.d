@@ -31,11 +31,25 @@ static if( __VERSION__ < 2066 ) private enum nogc;
 */
 enum Signal : string
 {
+	// Linux native requests
     Abort     = "Abort",
     Terminate = "Terminate",
     Quit      = "Quit",
     Interrupt = "Interrupt",
-    HangUp    = "HangUp"
+    HangUp    = "HangUp",
+    
+    // Windows native requests
+    Stop           = "Stop",
+    Continue       = "Continue",
+    Pause          = "Pause",
+    Shutdown       = "Shutdown",
+    Interrogate    = "Interrogate",
+    NetBindAdd     = "NetBindAdd",
+    NetBindDisable = "NetBindDisable",
+    NetBindEnable  = "NetBindEnable",
+    NetBindRemove  = "NetBindRemove",
+    ParamChange    = "ParamChange",
+    
 }
 
 /**
@@ -51,7 +65,22 @@ enum Signal : string
 {
     return cast(Signal)name;
 }
-    
+
+/**
+*	Signal OR composition.
+*
+*	If you'd like to hook several signals by one handler, you
+*	can use the template in place of signal in $(B KeyValueList)
+*	signal map.
+*
+*	In that case the handler should also accept a Signal value
+*	as it second parameter.
+*/
+template Composition(Signals...)
+{    
+	alias signals = Signals;
+}
+
 /**
 *   Template for describing daemon in the package. 
 *
