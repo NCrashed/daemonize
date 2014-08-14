@@ -46,7 +46,7 @@ string defaultLockFile(string daemonName)
 }
 
 /// Checks is $(B sig) is actually built-in
-@safe @nogc bool isNativeSignal(Signal sig) pure nothrow 
+@nogc @safe bool isNativeSignal(Signal sig) pure nothrow 
 {
     switch(sig)
     {
@@ -60,7 +60,7 @@ string defaultLockFile(string daemonName)
 }
 
 /// Checks is $(B sig) is not actually built-in
-@safe @nogc bool isCustomSignal(Signal sig) pure nothrow 
+@nogc @safe bool isCustomSignal(Signal sig) pure nothrow 
 {
     return !isNativeSignal(sig);
 }
