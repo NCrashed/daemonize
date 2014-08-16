@@ -11,8 +11,11 @@ version(Windows):
 static if( __VERSION__ < 2066 ) private enum nogc;
 
 import core.sys.windows.windows;
+import core.runtime;
+import core.thread;
 import std.datetime;
 import std.string;
+import std.utf;
 import std.c.stdlib;
 import std.typecons;
 
@@ -48,13 +51,11 @@ import dlogg.log;
 template runDaemon(alias DaemonInfo)
     if(isDaemon!DaemonInfo)
 {
-	int runDaemon(shared ILogger logger, int delegate() main
+	int runDaemon(shared ILogger logger
         , string pidFilePath = "", string lockFilePath = ""
         , int userId = -1, int groupId = -1)
     { 
     	savedLogger = logger;
-    	logger.minLoggingLevel = LoggingLevel.Muted;
-    	savedMain = main;
     	
 //    	serviceRemove();
 //    	return EXIT_SUCCESS;
@@ -64,87 +65,88 @@ template runDaemon(alias DaemonInfo)
     	{
     		savedLogger.logInfo("No service is installed!");
     		serviceInstall();
-    		//serviceStart();
+    		serviceStart();
     		return EXIT_SUCCESS;
     	} 
     	else
     	{
+    		savedLogger.logInfo("Starting daemon process!");
     		return serviceInit();
     	}
     }
     
-/*
-    		auto status = maybeStatus.get;
-    		
-    		if( status.dwCurrentState == SERVICE_RUNNING ||
-    			status.dwCurrentState == SERVICE_START_PENDING)
-    		{
-    			savedLogger.logInfo("Service is already running!");
-    			return EXIT_FAILURE;
-    		}
-    		else if(status.dwCurrentState == SERVICE_STOPPED)
-    		{
-    			savedLogger.logInfo("Service is stopped! Starting...");
-    			serviceStart();
-    			return EXIT_SUCCESS;
-    		} 
-    		else
-    		{
-    			savedLogger.logInfo("Unknown state of service!");
-    			return EXIT_FAILURE;
-    		}
-*/
     private
     {
     	SERVICE_STATUS serviceStatus;
     	SERVICE_STATUS_HANDLE serviceStatusHandle;
     	shared ILogger savedLogger;
-    	int delegate() savedMain;
     	
-    	extern(System) void serviceMain(DWORD argc, LPTSTR* argv)
+    	static class LoggedException : Exception
     	{
-    		serviceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
-    		
-    		serviceStatusHandle = RegisterServiceCtrlHandlerA(cast(LPSTR)DaemonInfo.daemonName.toStringz, &controlHandler);
-    		if(serviceStatusHandle is null)
+		    @safe nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+		    {
+		        savedLogger.logError(msg);
+		        super(msg, file, line, next);
+		    }
+		
+		    @safe nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
+		    {
+		    	savedLogger.logError(msg);
+		        super(msg, file, line, next);
+		    }
+    	}
+    	
+    	extern(System) static void serviceMain(uint argc, wchar** args) nothrow
+    	{
+    		try
     		{
-    			savedLogger.logError("Failed to register control handler!");
-    			savedLogger.logError(getLastErrorDescr);
-    			return;
-    		}
-    		
-    		reportServiceStatus(SERVICE_START_PENDING, NO_ERROR, 500.dur!"msecs");
-    		
-	        int code = EXIT_FAILURE;
-	        debug
-	        {
+	    		Runtime.initialize();
+	    		scope(exit) 
+	    		{
+	    			serviceRemove();
+	    			Runtime.terminate();
+    			}
+	    		
+		        int code = EXIT_FAILURE;
+
+	    		serviceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
+	    		
+	    		import dlogg.strict;
+	    		savedLogger = new shared StrictLogger("C:\\mylog.txt");
+	    		savedLogger.minOutputLevel = LoggingLevel.Muted;
+	    		savedLogger.logInfo("Registering control handler");
+	    		
+	    		serviceStatusHandle = RegisterServiceCtrlHandlerW(cast(LPWSTR)DaemonInfo.daemonName.toUTF16z, &controlHandler);
+	    		if(serviceStatusHandle is null)
+	    		{
+	    			savedLogger.logError("Failed to register control handler!");
+	    			savedLogger.logError(getLastErrorDescr);
+	    			return;
+	    		}
+	    		
+		        debug alias WhatToCatch = Throwable;
+		        else  alias WhatToCatch = Exception;
+		        
+	    		savedLogger.logInfo("Running user main delegate");
 	        	reportServiceStatus(SERVICE_RUNNING, NO_ERROR, 0.dur!"msecs");
-	            try code = savedMain();
-	            catch (Throwable ex) 
-	            {
-	                savedLogger.logError(text("Catched unhandled throwable in daemon level: ", ex.msg));
-	                savedLogger.logError("Terminating...");
-	                reportServiceStatus(SERVICE_STOPPED, EXIT_FAILURE, 0.dur!"msecs");
-	                return;
-	            }
-	        }
-	        else
-	        {
-	        	reportServiceStatus(SERVICE_RUNNING, NO_ERROR, 0.dur!"msecs");
-	            try code = savedMain();
-	            catch (Exception ex) 
+	            try code = DaemonInfo.mainFunc(savedLogger);
+	            catch (WhatToCatch ex) 
 	            {
 	                savedLogger.logError(text("Catched unhandled exception in daemon level: ", ex.msg));
 	                savedLogger.logError("Terminating...");
 	                reportServiceStatus(SERVICE_STOPPED, EXIT_FAILURE, 0.dur!"msecs");
 	                return;
 	            }
+		        reportServiceStatus(SERVICE_STOPPED, NO_ERROR, 0.dur!"msecs");
 	        }
-	        
-	        reportServiceStatus(SERVICE_STOPPED, NO_ERROR, 0.dur!"msecs");
+    		catch(Throwable th)
+    		{
+    			savedLogger.logError(text("Internal daemon error, please bug report: ", th.msg));
+                savedLogger.logError("Terminating...");
+    		}
     	}
     	
-    	extern(System) void controlHandler(DWORD fdwControl)
+    	extern(System) static void controlHandler(DWORD fdwControl)
     	{
     		// NEED TO CHANGE THIS
     		switch(fdwControl)
@@ -172,20 +174,17 @@ template runDaemon(alias DaemonInfo)
     	/// Wrapper for getting service manager
     	SC_HANDLE getSCManager()
     	{
-    		auto manager = OpenSCManagerA(null, null, SC_MANAGER_ALL_ACCESS);
+    		auto manager = OpenSCManagerW(null, null, SC_MANAGER_ALL_ACCESS);
     		if(manager is null)
-    		{
-    			savedLogger.logError("Failed to open SC manager!");
-    			savedLogger.logError(getLastErrorDescr);
-    			throw new Exception(text("Failed to open SC manager!", getLastErrorDescr));
-    		}
+    			throw new LoggedException(text("Failed to open SC manager!", getLastErrorDescr));
+    		
     		return manager;
     	}
     	
     	/// Wrapper for getting service handle
     	SC_HANDLE getService(SC_HANDLE manager, DWORD accessFlags, bool supressLogging = false)
     	{
-    		auto service = OpenServiceA(manager, DaemonInfo.daemonName.toStringz, accessFlags);
+    		auto service = OpenServiceW(manager, cast(LPWSTR)DaemonInfo.daemonName.toUTF16z, accessFlags);
     		if(service is null)
     		{
     			if(!supressLogging)
@@ -202,12 +201,12 @@ template runDaemon(alias DaemonInfo)
     	int serviceInit()
     	{
 	    	SERVICE_TABLE_ENTRY[2] serviceTable;
-	    	serviceTable[0].lpServiceName = cast(LPSTR)DaemonInfo.daemonName.toStringz;
+	    	serviceTable[0].lpServiceName = cast(LPWSTR)DaemonInfo.daemonName.toUTF16z;
 	    	serviceTable[0].lpServiceProc = &serviceMain;
 	    	serviceTable[1].lpServiceName = null;
 	    	serviceTable[1].lpServiceProc = null;
 	    	
-	    	if(!StartServiceCtrlDispatcherA(serviceTable.ptr))
+	    	if(!StartServiceCtrlDispatcherW(serviceTable.ptr))
 	    	{
 	    		savedLogger.logError("Failed to start service dispatcher!");
 	    		savedLogger.logError(getLastErrorDescr);
@@ -222,17 +221,13 @@ template runDaemon(alias DaemonInfo)
     	{
     		wchar[MAX_PATH] path;
     		if(!GetModuleFileNameW(null, path.ptr, MAX_PATH))
-    		{
-    			savedLogger.logError("Cannot install service!");
-    			savedLogger.logError(getLastErrorDescr);
-    			return;
-    		}
+    			throw new LoggedException("Cannot install service! " ~ getLastErrorDescr); 
     		
     		auto manager = getSCManager();
     		scope(exit) CloseServiceHandle(manager);
     		
-    		auto servname = cast(LPSTR)DaemonInfo.daemonName.toStringz;
-    		auto service = CreateServiceA(
+    		auto servname = cast(LPWSTR)DaemonInfo.daemonName.toUTF16z;
+    		auto service = CreateServiceW(
     			manager,
     			servname,
     			servname,
@@ -249,11 +244,7 @@ template runDaemon(alias DaemonInfo)
     		scope(exit) CloseServiceHandle(service);
     		
     		if(service is null)
-    		{
-    			savedLogger.logError("Failed to create service!");
-    			savedLogger.logError(getLastErrorDescr);
-    			return;
-    		}
+    			throw new LoggedException("Failed to create service! " ~ getLastErrorDescr); 
     		
     		savedLogger.logInfo("Service installed successfully!");
     	}
@@ -278,13 +269,42 @@ template runDaemon(alias DaemonInfo)
     		auto service = getService(manager, SERVICE_START);
     		scope(exit) CloseServiceHandle(service);
     		
-    		if(!StartServiceA(service, 0, null))
-    		{
-    			savedLogger.logError("Failed to start service!");
-    			savedLogger.logError(getLastErrorDescr);
-    			throw new Exception(text("Failed to start service! ", getLastErrorDescr));
-    		}
+    		if(!StartServiceW(service, 0, null))
+    			throw new LoggedException(text("Failed to start service! ", getLastErrorDescr));
     		
+    		
+    		auto maybeStatus = queryServiceStatus();
+	    	if(maybeStatus.isNull)
+	    	{
+	    		throw new LoggedException("Failed to start service! There is no service registered!");
+	    	}
+	    	else
+	    	{
+	    		Thread.sleep(500.dur!"msecs");
+	    		
+	    		auto status = maybeStatus.get;
+	    		auto stamp = Clock.currSystemTick;
+	    		while(status.dwCurrentState != SERVICE_RUNNING)
+	    		{
+	    			if(stamp + cast(TickDuration)30.dur!"seconds" < Clock.currSystemTick) 
+	    				throw new LoggedException("Cannot start service! Timeout");
+    				if(status.dwWin32ExitCode != 0)
+    					throw new LoggedException(text("Failed to start service! Service error code: ", status.dwWin32ExitCode));
+					if(status.dwCurrentState == SERVICE_STOPPED)
+						throw new LoggedException("Failed to start service! The service remains in stop state!");
+						
+					auto maybeStatus2 = queryServiceStatus();
+			    	if(maybeStatus2.isNull)
+			    	{
+			    		throw new LoggedException("Failed to start service! There is no service registered!");
+			    	}
+			    	else
+			    	{
+			    		status = maybeStatus2.get;
+			    	}
+	    		}
+	    	}
+	    	
     		savedLogger.logInfo("Service is started successfully!");
     	}
     	
@@ -298,20 +318,17 @@ template runDaemon(alias DaemonInfo)
     		try
     		{
     			service = getService(manager, SERVICE_QUERY_STATUS, true);
-    			scope(exit) CloseServiceHandle(service);
 			} catch(Exception e)
     		{
     			Nullable!SERVICE_STATUS ret;
     			return ret;
     		}
+    		scope(exit) CloseServiceHandle(service);
     		
     		SERVICE_STATUS status;
     		if(!QueryServiceStatus(service, &status))
-    		{
-    			savedLogger.logError("Failed to query service!");
-    			savedLogger.logError(getLastErrorDescr);
-    			throw new Exception(text("Failed to query service! ", getLastErrorDescr));
-    		}
+    			throw new LoggedException(text("Failed to query service! ", getLastErrorDescr));
+
     		return Nullable!SERVICE_STATUS(status);
     	}
     	
@@ -332,6 +349,8 @@ template runDaemon(alias DaemonInfo)
     		{
     			serviceStatus.dwControlsAccepted = SERVICE_ACCEPT_STOP | SERVICE_ACCEPT_SHUTDOWN; // Need to change this according DaemonInfo!
     		}
+    		
+    		SetServiceStatus(serviceStatusHandle, &serviceStatus);
     	}
     	
     	/// Reads last error id and formats it into a man-readable message
@@ -346,21 +365,45 @@ template runDaemon(alias DaemonInfo)
 
 			return buffer.fromStringz[0 .. $-1].idup;
     	}
+    	
+    	/// Terminating application with cleanup
+        void terminate(int code, bool isDaemon = true) nothrow
+        {
+            if(isDaemon)
+            {
+                savedLogger.logInfo("Daemon is terminating with code: " ~ to!string(code));
+                savedLogger.finalize();
+            
+                gc_term();
+                _STD_critical_term();
+                _STD_monitor_staticdtor();
+            }
+            
+            exit(code);
+        }
     }
+}
+// D runtime
+private extern(C) nothrow
+{
+    // These are for control of termination
+    void _STD_monitor_staticdtor();
+    void _STD_critical_term();
+    void gc_term();
 }
 // winapi defines
 private extern(System) 
 {
 	struct SERVICE_TABLE_ENTRY 
 	{
-		LPTSTR                  lpServiceName;
+		LPWSTR                  lpServiceName;
 		LPSERVICE_MAIN_FUNCTION lpServiceProc;
 	}
 	alias LPSERVICE_TABLE_ENTRY = SERVICE_TABLE_ENTRY*;
 	
-	alias LPSERVICE_MAIN_FUNCTION = void function(DWORD dwArgc, LPTSTR* lpszArgv);
+	alias extern(System) void function(DWORD dwArgc, LPWSTR* lpszArgv) LPSERVICE_MAIN_FUNCTION;
 	
-	BOOL StartServiceCtrlDispatcherA(const SERVICE_TABLE_ENTRY* lpServiceTable);
+	BOOL StartServiceCtrlDispatcherW(const SERVICE_TABLE_ENTRY* lpServiceTable);
 	
 	struct SERVICE_STATUS
 	{
@@ -403,10 +446,10 @@ private extern(System)
 	
 	enum NO_ERROR = 0;
 	
-	alias LPHANDLER_FUNCTION = void function(DWORD fdwControl);
-	SERVICE_STATUS_HANDLE RegisterServiceCtrlHandlerA(LPCTSTR lpServiceName, LPHANDLER_FUNCTION lpHandlerProc);
+	alias extern(System) void function(DWORD fdwControl) LPHANDLER_FUNCTION;
+	SERVICE_STATUS_HANDLE RegisterServiceCtrlHandlerW(LPWSTR lpServiceName, LPHANDLER_FUNCTION lpHandlerProc);
 	
-	SC_HANDLE OpenSCManagerA(LPCTSTR lpMachineName, LPCTSTR lpDatabaseName, DWORD dwDesiredAccess);
+	SC_HANDLE OpenSCManagerW(LPWSTR lpMachineName, LPWSTR lpDatabaseName, DWORD dwDesiredAccess);
 	
 	// dwDesiredAccess
 	enum SC_MANAGER_ALL_ACCESS = 0xF003F;
@@ -417,20 +460,20 @@ private extern(System)
 	enum SC_MANAGER_MODIFY_BOOT_CONFIG = 0x0020;
 	enum SC_MANAGER_QUERY_LOCK_STATUS = 0x0010;
 	
-	SC_HANDLE CreateServiceA(
+	SC_HANDLE CreateServiceW(
 	  	SC_HANDLE hSCManager,
-	  	LPCTSTR lpServiceName,
-	  	LPCTSTR lpDisplayName,
+	  	LPWSTR lpServiceName,
+	  	LPWSTR lpDisplayName,
 	  	DWORD dwDesiredAccess,
 	  	DWORD dwServiceType,
 	  	DWORD dwStartType,
 	  	DWORD dwErrorControl,
 	  	LPWSTR lpBinaryPathName,
-	 	LPCTSTR lpLoadOrderGroup,
+	 	LPWSTR lpLoadOrderGroup,
 	  	LPDWORD lpdwTagId,
-	  	LPCTSTR lpDependencies,
-	  	LPCTSTR lpServiceStartName,
-	  	LPCTSTR lpPassword
+	  	LPWSTR lpDependencies,
+	  	LPWSTR lpServiceStartName,
+	  	LPWSTR lpPassword
 	);
 	
 	// dwStartType
@@ -460,9 +503,9 @@ private extern(System)
 	
 	bool CloseServiceHandle(SC_HANDLE hSCOjbect);
 	
-	SC_HANDLE OpenServiceA(
+	SC_HANDLE OpenServiceW(
 		SC_HANDLE hSCManager,
-		LPCTSTR lpServiceName,
+		LPWSTR lpServiceName,
 		DWORD dwDesiredAccess
 	);
 	
@@ -470,14 +513,19 @@ private extern(System)
 		SC_HANDLE hService
 	);
 	
-	BOOL StartServiceA(
+	BOOL StartServiceW(
 		SC_HANDLE hService,
 		DWORD dwNumServiceArgs,
-		LPCTSTR *lpServiceArgVectors
+		LPWSTR *lpServiceArgVectors
 	);
 	
 	BOOL QueryServiceStatus(
 		SC_HANDLE hService,
+		LPSERVICE_STATUS lpServiceStatus
+	);
+	
+	BOOL SetServiceStatus(
+		SERVICE_STATUS_HANDLE hServiceStatus,
 		LPSERVICE_STATUS lpServiceStatus
 	);
 	

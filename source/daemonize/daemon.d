@@ -119,16 +119,19 @@ template Composition(Signals...)
 */
 template Daemon(
     string name,
-    alias pSignalMap)
+    alias pSignalMap,
+    alias pMainFunc)
 {
     enum daemonName = name;
-    alias signalMap = pSignalMap; 
+    alias signalMap = pSignalMap;
+    alias mainFunc = pMainFunc; 
 }
 
 /// Duck typing $(B Daemon) description
 template isDaemon(alias T)
 {
-    static if(__traits(compiles, T.daemonName) && __traits(compiles, T.signalMap))
+    static if(__traits(compiles, T.daemonName) && __traits(compiles, T.signalMap)
+    	&& __traits(compiles, T.mainFunc))
         enum isDaemon = is(typeof(T.daemonName) == string);
     else
         enum isDaemon = false;

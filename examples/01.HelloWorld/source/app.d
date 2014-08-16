@@ -35,19 +35,20 @@ alias daemon = Daemon!(
             logger.logInfo("Hello World!");
             return true; // continue execution
         }
-    )
+    ),
+    
+    // Main function where your code is
+    (logger) {
+        // will stop the daemon in 5 minutes
+        auto time = Clock.currSystemTick;
+        while(time + cast(TickDuration)5.dur!"minutes" > Clock.currSystemTick) {}
+        logger.logInfo("Timeout. Exiting");
+        return 0;
+    }
 );
 
 int main()
 {
     auto logger = new shared StrictLogger("logfile.log");
-    return runDaemon!daemon(logger, 
-        // Main function where your code is
-        () {
-            // will stop the daemon in 5 minutes
-            auto time = Clock.currSystemTick;
-            while(time + cast(TickDuration)5.dur!"minutes" > Clock.currSystemTick) {}
-            logger.logInfo("Timeout. Exiting");
-            return 0;
-        }); 
+    return runDaemon!daemon(logger); 
 }
