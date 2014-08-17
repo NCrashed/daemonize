@@ -91,7 +91,10 @@ template staticFilter(alias F, T...)
     }
     else
     {
-        static if(F(T[0]))
+    	static if(__traits(compiles, F(T[0]))) enum result = F(T[0]);
+    	else enum result = F!(T[0]);
+    	
+        static if(result)
         {
             alias staticFilter = ExpressionList!(T[0], staticFilter!(F, T[1 .. $]));
         } 
@@ -165,7 +168,7 @@ template staticFold(alias F, T...)
     }
     else static if(T.length == 1)
     {
-        static if(is(T[0]))
+        static if(is(T[0]) || !__traits(compiles, {enum staticFold = T[0];}))
             alias staticFold = T[0];
         else
             enum staticFold = T[0];
@@ -280,11 +283,11 @@ template KeyValueList(Pairs...)
         static assert(Keys.length > 0, "KeyValueList.get is expecting an argument!");
         static if(Keys.length == 1)
         {
-            static if(is(Keys[0])) { 
+            static if(is(Keys[0]) || !__traits(compiles, { enum Key = Keys[0]; }) ) { 
                 alias Key = Keys[0];
             } else {
                 enum Key = Keys[0];
-                static assert(__traits(compiles, Key == Key), text(typeof(Key).stringof, " must have a opCmp!"));
+                static assert(__traits(compiles, Key == Key), text(typeof(Key).stringof, " must have a opEqual!"));
             }
             
             private static template innerFind(T...)
@@ -305,7 +308,10 @@ template KeyValueList(Pairs...)
                         }
                     } else
                     {
-                        static if(T[0] == Key) {
+                    	static if(__traits(compiles, T[0].opEqual!(Key))) enum cmpRes = T[0].opEqual!(Key);
+                    	else enum cmpRes = T[0] == Key;
+                    	 
+                        static if(cmpRes) {
                             static if(is(T[1])) {
                                 alias innerFind = T[1];
                             } else {

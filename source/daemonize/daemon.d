@@ -79,6 +79,37 @@ enum Signal : string
 template Composition(Signals...)
 {    
 	alias signals = Signals;
+	
+	template opEqual(T...)
+	{
+		static if(T.length > 0 && isComposition!(T[0]))
+		{
+			enum opEqual = [signals] == [T[0].signals];
+		}
+		else enum opEqual = false;
+	}
+}
+
+/// Checks if $(B T) is a composition of signals
+template isComposition(alias T)
+{
+	static if(__traits(compiles, T.signals))
+	{
+		private template isSignal(T...)
+		{
+			static if(is(T[0]))
+			{
+				enum isSignal = is(T[0] : Signal);
+			}
+			else
+			{
+				enum isSignal = is(typeof(T[0]) : Signal);
+			}
+		}
+		
+		enum isComposition = allSatisfy!(isSignal, T.signals);
+	}
+	else enum isComposition = false;
 }
 
 /**

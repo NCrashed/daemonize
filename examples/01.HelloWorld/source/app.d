@@ -25,7 +25,7 @@ alias daemon = Daemon!(
     
     // Setting associative map signal -> callbacks
     KeyValueList!(
-        Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown), (logger, signal)
+        Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown, Signal.Stop), (logger, signal)
         {
             logger.logInfo("Exiting...");
             return false; // returning false will terminate daemon
@@ -38,17 +38,23 @@ alias daemon = Daemon!(
     ),
     
     // Main function where your code is
-    (logger) {
+    (logger, shouldExit) {
         // will stop the daemon in 5 minutes
-        auto time = Clock.currSystemTick;
-        while(time + cast(TickDuration)5.dur!"minutes" > Clock.currSystemTick) {}
-        logger.logInfo("Timeout. Exiting");
+        auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
+        bool timeout = false;
+        while(!shouldExit() && time > Clock.currSystemTick) {  }
+        
+        logger.logInfo("Exiting main function!");
+        
         return 0;
     }
 );
 
 int main()
 {
-    auto logger = new shared StrictLogger("logfile.log");
-    return runDaemon!daemon(logger); 
+	// For windows is important to use absolute path for logging
+	version(Windows) string logFilePath = "C:\\logfile.log";
+	else string logFilePath = "logfile.log";
+	
+    return buildDaemon!daemon.run(new shared StrictLogger(logFilePath)); 
 }
