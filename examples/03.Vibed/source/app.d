@@ -25,7 +25,7 @@ alias daemon = Daemon!(
     "DaemonizeExample3", // unique name
     
     KeyValueList!(
-        Signal.Terminate, (logger)
+        Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown, Signal.Stop), (logger)
         {
             logger.logInfo("Exiting...");
             
@@ -39,7 +39,19 @@ alias daemon = Daemon!(
             logger.logInfo("Hello World!");
             return true;
         }
-    )
+    ),
+    
+    (logger, shouldExit) {
+        // Default vibe initialization
+        auto settings = new HTTPServerSettings;
+        settings.port = 8080;
+        settings.bindAddresses = ["127.0.0.1"];
+        
+        listenHTTP(settings, &handleRequest);
+    
+        // All exceptions are caught by daemonize
+        return runEventLoop();
+    }
 );
 
 // Vibe handler
@@ -54,23 +66,17 @@ int main()
     // Setting vibe logger 
     // daemon closes stdout/stderr and vibe logger will crash
     // if not suppress printing to console
-    enum vibeLogName = "vibe.log";
+    version(Windows) enum vibeLogName = "C:\\vibe.log";
+	else enum vibeLogName = "vibe.log";
+	
     setLogLevel(VibeLogLevel.none); // no stdout/stderr output
     setLogFile(vibeLogName, VibeLogLevel.info);
     setLogFile(vibeLogName, VibeLogLevel.error);
     setLogFile(vibeLogName, VibeLogLevel.warn);
             
-    auto logger = new shared StrictLogger("logfile.log");
-    return runDaemon!daemon(logger, 
-        () {
-            // Default vibe initialization
-            auto settings = new HTTPServerSettings;
-            settings.port = 8080;
-            settings.bindAddresses = ["127.0.0.1"];
-            
-            listenHTTP(settings, &handleRequest);
-        
-            // All exceptions are caught by daemonize
-            return runEventLoop();
-        }); 
+    version(Windows) enum logFileName = "C:\\logfile.log";
+	else enum logFileName = "logfile.log";
+	
+    auto logger = new shared StrictLogger(logFileName);
+    return buildDaemon!daemon.run(logger); 
 }
