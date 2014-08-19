@@ -54,40 +54,43 @@ template buildDaemon(alias DaemonInfo)
 {
 	alias daemon = readDaemonInfo!DaemonInfo;
 	
-	int run(shared ILogger logger
-        , string pidFilePath = "", string lockFilePath = ""
-        , int userId = -1, int groupId = -1)
-    { 
-    	savedLogger = logger;
-    	
-    	auto maybeStatus = queryServiceStatus();
-    	if(maybeStatus.isNull)
-    	{
-    		savedLogger.logInfo("No service is installed!");
-    		serviceInstall();
-    		serviceStart();
-    		return EXIT_SUCCESS;
-    	} 
-    	else
-    	{    		
-    		auto initResult = serviceInit();
-    		if(initResult == ServiceInitState.NotService)
-    		{
-    			auto state = maybeStatus.get.dwCurrentState;
-    			if(state == SERVICE_STOPPED)
-    			{
-    				savedLogger.logInfo("Starting installed service!");
-    				serviceStart();
-				}
-    		} else if(initResult == initResult.OtherError)
-    		{
-    			return EXIT_FAILURE;
-    		}
-    		
-    		return EXIT_SUCCESS;
-    	}
+	static if(isDaemon!DaemonInfo)
+	{
+		int run(shared ILogger logger
+	        , string pidFilePath = "", string lockFilePath = ""
+	        , int userId = -1, int groupId = -1)
+	    { 
+	    	savedLogger = logger;
+	    	
+	    	auto maybeStatus = queryServiceStatus();
+	    	if(maybeStatus.isNull)
+	    	{
+	    		savedLogger.logInfo("No service is installed!");
+	    		serviceInstall();
+	    		serviceStart();
+	    		return EXIT_SUCCESS;
+	    	} 
+	    	else
+	    	{    		
+	    		auto initResult = serviceInit();
+	    		if(initResult == ServiceInitState.NotService)
+	    		{
+	    			auto state = maybeStatus.get.dwCurrentState;
+	    			if(state == SERVICE_STOPPED)
+	    			{
+	    				savedLogger.logInfo("Starting installed service!");
+	    				serviceStart();
+					}
+	    		} else if(initResult == initResult.OtherError)
+	    		{
+	    			return EXIT_FAILURE;
+	    		}
+	    		
+	    		return EXIT_SUCCESS;
+	    	}
+	    }
     }
-    
+	
     /**
     *	Utility function that helps to uninstall the service from the system.
     */
@@ -104,6 +107,20 @@ template buildDaemon(alias DaemonInfo)
     	{
     		savedLogger.logWarning("Cannot find service in SC manager! No uninstallation action is performed.");
     	}
+    }
+    
+    void sendSignal(shared ILogger logger, Signal sig)
+    {
+    	savedLogger = logger;
+    	
+    	auto manager = getSCManager;
+    	scope(exit) CloseServiceHandle(manager);
+    	
+    	auto service = getService(manager, daemon.getControlAccessFlag(sig));
+    	scope(exit) CloseServiceHandle(service);
+    	
+    	if(!ControlService(service, daemon.mapSignal(sig), &serviceStatus))
+    		throw new LoggedException(text("Failed to send signal to service ", DaemonInfo.daemonName, ". Details: ", getLastErrorDescr));
     }
     
     private
@@ -132,69 +149,95 @@ template buildDaemon(alias DaemonInfo)
 		    }
     	}
     	
-    	extern(System) static void serviceMain(uint argc, wchar** args) nothrow
+    	static if(isDaemon!DaemonInfo)
     	{
-    		try
-    		{	    		
-		        int code = EXIT_FAILURE;
-
-	    		serviceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
-	    		
-	    		savedLogger.reload;
-	    		savedLogger.minOutputLevel = LoggingLevel.Muted;
-	    		savedLogger.logInfo("Registering control handler");
-	    		
-	    		serviceStatusHandle = RegisterServiceCtrlHandlerW(cast(LPWSTR)DaemonInfo.daemonName.toUTF16z, &controlHandler);
-	    		if(serviceStatusHandle is null)
+	    	extern(System) static void serviceMain(uint argc, wchar** args) nothrow
+	    	{
+	    		try
+	    		{	    		
+			        int code = EXIT_FAILURE;
+	
+		    		serviceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
+		    		
+		    		savedLogger.reload;
+		    		savedLogger.minOutputLevel = LoggingLevel.Muted;
+		    		savedLogger.logInfo("Registering control handler");
+		    		
+		    		serviceStatusHandle = RegisterServiceCtrlHandlerW(cast(LPWSTR)DaemonInfo.daemonName.toUTF16z, &controlHandler);
+		    		if(serviceStatusHandle is null)
+		    		{
+		    			savedLogger.logError("Failed to register control handler!");
+		    			savedLogger.logError(getLastErrorDescr);
+		    			return;
+		    		}
+		    		
+			        debug alias WhatToCatch = Throwable;
+			        else  alias WhatToCatch = Exception;
+			        
+		    		savedLogger.logInfo("Running user main delegate");
+		        	reportServiceStatus(SERVICE_RUNNING, NO_ERROR, 0.dur!"msecs");
+		            try code = DaemonInfo.mainFunc(savedLogger, &shouldExit);
+		            catch (WhatToCatch ex) 
+		            {
+		                savedLogger.logError(text("Catched unhandled exception in daemon level: ", ex.msg));
+		                savedLogger.logError("Terminating...");
+		                reportServiceStatus(SERVICE_STOPPED, EXIT_FAILURE, 0.dur!"msecs");
+		                return;
+		            }
+			        reportServiceStatus(SERVICE_STOPPED, NO_ERROR, 0.dur!"msecs");
+		        }
+	    		catch(Throwable th)
 	    		{
-	    			savedLogger.logError("Failed to register control handler!");
-	    			savedLogger.logError(getLastErrorDescr);
-	    			return;
-	    		}
-	    		
-		        debug alias WhatToCatch = Throwable;
-		        else  alias WhatToCatch = Exception;
-		        
-	    		savedLogger.logInfo("Running user main delegate");
-	        	reportServiceStatus(SERVICE_RUNNING, NO_ERROR, 0.dur!"msecs");
-	            try code = DaemonInfo.mainFunc(savedLogger, &shouldExit);
-	            catch (WhatToCatch ex) 
-	            {
-	                savedLogger.logError(text("Catched unhandled exception in daemon level: ", ex.msg));
+	    			savedLogger.logError(text("Internal daemon error, please bug report: ", th.msg));
 	                savedLogger.logError("Terminating...");
-	                reportServiceStatus(SERVICE_STOPPED, EXIT_FAILURE, 0.dur!"msecs");
-	                return;
-	            }
-		        reportServiceStatus(SERVICE_STOPPED, NO_ERROR, 0.dur!"msecs");
-	        }
-    		catch(Throwable th)
-    		{
-    			savedLogger.logError(text("Internal daemon error, please bug report: ", th.msg));
-                savedLogger.logError("Terminating...");
-    		}
-    	}
-    	
-    	extern(System) static void controlHandler(DWORD fdwControl) nothrow
-    	{
-    		switch(fdwControl)
-    		{
-    			foreach(signal; DaemonInfo.signalMap.keys)
-    			{
-					alias handler = DaemonInfo.signalMap.get!signal;
-    				
-    				static if(isComposition!signal)
-    				{
-    					foreach(subsignal; signal.signals)
-    					{
-    						enum nativeCode = daemon.mapSignal(subsignal);
+	    		}
+	    	}
+	    	
+	    	extern(System) static void controlHandler(DWORD fdwControl) nothrow
+	    	{
+	    		switch(fdwControl)
+	    		{
+	    			foreach(signal; DaemonInfo.signalMap.keys)
+	    			{
+						alias handler = DaemonInfo.signalMap.get!signal;
+	    				
+	    				static if(isComposition!signal)
+	    				{
+	    					foreach(subsignal; signal.signals)
+	    					{
+	    						enum nativeCode = daemon.mapSignal(subsignal);
+								case(nativeCode):
+								{
+									savedLogger.logInfo(text("Caught signal ", subsignal));
+									bool res = true;
+									try 
+									{
+										static if(__traits(compiles, handler(savedLogger, subsignal)))
+											res = handler(savedLogger, subsignal);
+										else
+											res = handler(savedLogger);
+											
+										if(!res) reportServiceStatus(SERVICE_STOPPED, NO_ERROR, 0.dur!"msecs");
+									}
+									catch(Throwable th)
+									{
+										savedLogger.logError(text("Caught a throwable at signal ", subsignal, " handler: ", th));
+									}
+									return;
+								}
+	    					}
+	    				}
+	    				else 
+	    				{
+	    					enum nativeCode = daemon.mapSignal(signal);
 							case(nativeCode):
 							{
-								savedLogger.logInfo(text("Caught signal ", subsignal));
+								savedLogger.logInfo(text("Caught signal ", signal));
 								bool res = true;
 								try 
 								{
-									static if(__traits(compiles, handler(savedLogger, subsignal)))
-										res = handler(savedLogger, subsignal);
+									static if(__traits(compiles, handler(savedLogger, signal)))
+										res = handler(savedLogger, signal);
 									else
 										res = handler(savedLogger);
 										
@@ -202,41 +245,18 @@ template buildDaemon(alias DaemonInfo)
 								}
 								catch(Throwable th)
 								{
-									savedLogger.logError(text("Caught a throwable at signal ", subsignal, " handler: ", th));
+									savedLogger.logError(text("Caught a throwable at signal ", signal, " handler: ", th));
 								}
 								return;
 							}
-    					}
-    				}
-    				else 
-    				{
-    					enum nativeCode = daemon.mapSignal(signal);
-						case(nativeCode):
-						{
-							savedLogger.logInfo(text("Caught signal ", signal));
-							bool res = true;
-							try 
-							{
-								static if(__traits(compiles, handler(savedLogger, signal)))
-									res = handler(savedLogger, signal);
-								else
-									res = handler(savedLogger);
-									
-								if(!res) reportServiceStatus(SERVICE_STOPPED, NO_ERROR, 0.dur!"msecs");
-							}
-							catch(Throwable th)
-							{
-								savedLogger.logError(text("Caught a throwable at signal ", signal, " handler: ", th));
-							}
-							return;
-						}
-    				}
-    			}
-    			default:
-    			{
-    				savedLogger.logWarning(text("Caught signal ", fdwControl, ". But don't have any handler binded!"));
-    			}
-    		}
+	    				}
+	    			}
+	    			default:
+	    			{
+	    				savedLogger.logWarning(text("Caught signal ", fdwControl, ". But don't have any handler binded!"));
+	    			}
+	    		}
+	    	}
     	}
     	
     	/// Wrapper for getting service manager
@@ -265,46 +285,49 @@ template buildDaemon(alias DaemonInfo)
     		return service;
     	}
     	
-    	enum ServiceInitState
+    	static if(isDaemon!DaemonInfo)
     	{
-    		ServiceIsOk, // dispatcher has run successfully 
-    		NotService,  // dispatcher failed with specific error
-    		OtherError
-    	}
-    	
-    	/// Performs service initialization
-    	/**
-    	*	If inner $(B StartServiceCtrlDispatcherW) fails due reason that
-    	*	the code is running in userspace, the function returns ServiceInitState.NotService.
-    	*
-    	*	If the code is run under SC manager, the dispatcher operates and the function
-    	*	returns ServiceInitState.ServiceIsOk at the end of service execution.
-    	*
-    	*	If something wrong happens, the function returns ServiceInitState.OtherError
-    	*/
-    	ServiceInitState serviceInit()
-    	{
-	    	SERVICE_TABLE_ENTRY[2] serviceTable;
-	    	serviceTable[0].lpServiceName = cast(LPWSTR)DaemonInfo.daemonName.toUTF16z;
-	    	serviceTable[0].lpServiceProc = &serviceMain;
-	    	serviceTable[1].lpServiceName = null;
-	    	serviceTable[1].lpServiceProc = null;
-	    	
-	    	if(!StartServiceCtrlDispatcherW(serviceTable.ptr))
+	    	enum ServiceInitState
 	    	{
-	    		if(GetLastError == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT)
-	    		{
-	    			return ServiceInitState.NotService;
-	    		}
-	    		else
-	    		{
-		    		savedLogger.logError("Failed to start service dispatcher!");
-		    		savedLogger.logError(getLastErrorDescr);
-		    		return ServiceInitState.OtherError;
-	    		}
+	    		ServiceIsOk, // dispatcher has run successfully 
+	    		NotService,  // dispatcher failed with specific error
+	    		OtherError
 	    	}
 	    	
-	    	return ServiceInitState.ServiceIsOk;
+	    	/// Performs service initialization
+	    	/**
+	    	*	If inner $(B StartServiceCtrlDispatcherW) fails due reason that
+	    	*	the code is running in userspace, the function returns ServiceInitState.NotService.
+	    	*
+	    	*	If the code is run under SC manager, the dispatcher operates and the function
+	    	*	returns ServiceInitState.ServiceIsOk at the end of service execution.
+	    	*
+	    	*	If something wrong happens, the function returns ServiceInitState.OtherError
+	    	*/
+	    	ServiceInitState serviceInit()
+	    	{
+		    	SERVICE_TABLE_ENTRY[2] serviceTable;
+		    	serviceTable[0].lpServiceName = cast(LPWSTR)DaemonInfo.daemonName.toUTF16z;
+		    	serviceTable[0].lpServiceProc = &serviceMain;
+		    	serviceTable[1].lpServiceName = null;
+		    	serviceTable[1].lpServiceProc = null;
+		    	
+		    	if(!StartServiceCtrlDispatcherW(serviceTable.ptr))
+		    	{
+		    		if(GetLastError == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT)
+		    		{
+		    			return ServiceInitState.NotService;
+		    		}
+		    		else
+		    		{
+			    		savedLogger.logError("Failed to start service dispatcher!");
+			    		savedLogger.logError(getLastErrorDescr);
+			    		return ServiceInitState.OtherError;
+		    		}
+		    	}
+		    	
+		    	return ServiceInitState.ServiceIsOk;
+	    	}
     	}
     	
     	/// Registers service in SCM database
@@ -548,6 +571,24 @@ private
     		
     		return accum;
     	}
+    	
+    	DWORD getControlAccessFlag(Signal sig)
+    	{
+		    switch(sig)
+		    {
+		        case(Signal.Stop):           return SERVICE_STOP;
+		        case(Signal.Continue):       return SERVICE_PAUSE_CONTINUE;
+		        case(Signal.Pause):          return SERVICE_PAUSE_CONTINUE;
+		        case(Signal.Shutdown):       throw new Error("Cannot send the shutdown signal!");
+		        case(Signal.Interrogate):    return SERVICE_INTERROGATE ;
+		        case(Signal.NetBindAdd):     return SERVICE_PAUSE_CONTINUE;
+		        case(Signal.NetBindDisable): return SERVICE_PAUSE_CONTINUE;
+		        case(Signal.NetBindEnable):  return SERVICE_PAUSE_CONTINUE;
+		        case(Signal.NetBindRemove):  return SERVICE_PAUSE_CONTINUE;
+		        case(Signal.ParamChange):    return SERVICE_PAUSE_CONTINUE;
+		        default: return SERVICE_USER_DEFINED_CONTROL;
+		    }
+    	}
 	}
 }
 // winapi defines
@@ -686,6 +727,12 @@ private extern(System)
 	BOOL SetServiceStatus(
 		SERVICE_STATUS_HANDLE hServiceStatus,
 		LPSERVICE_STATUS lpServiceStatus
+	);
+	
+	BOOL ControlService(
+		SC_HANDLE hService,
+	  	DWORD dwControl,
+	  	LPSERVICE_STATUS lpServiceStatus
 	);
 	
 	enum SERVICE_CONTROL_CONTINUE = 0x00000003;

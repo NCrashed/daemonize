@@ -14,11 +14,13 @@
 		{
 			"name": "daemon",
 			"targetType": "executable",
+			"targetName": "ex2-daemon",
 			"versions": ["DaemonServer"]
 		},
 		{
 			"name": "client",
 			"targetType": "executable",
+			"targetName": "ex2-client",
 			"versions": ["DaemonClient"]
 		}	
 	]

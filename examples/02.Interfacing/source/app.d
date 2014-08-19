@@ -25,7 +25,7 @@ version(DaemonServer)
         "DaemonizeExample2",
         
         KeyValueList!(
-            Signal.Terminate, (logger)
+            Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown, Signal.Stop), (logger)
             {
                 logger.logInfo("Exiting...");
                 return false;
@@ -46,20 +46,29 @@ version(DaemonServer)
                 logger.logInfo("Doing something...");
                 return true;
             }
-        )
+        ),
+        
+        (logger, shouldExit) 
+        {
+	        // will stop the daemon in 5 minutes
+	        auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
+	        bool timeout = false;
+	        while(!shouldExit() && time > Clock.currSystemTick) {  }
+	        
+	        logger.logInfo("Exiting main function!");
+	        
+	        return 0;
+        }
     );
     
     int main()
     {
-        auto logger = new shared StrictLogger("daemon.log");
-        return runDaemon!daemon(logger, 
-            () {
-                // will stop the daemon in 5 minutes
-                auto time = Clock.currSystemTick;
-                while(time + cast(TickDuration)5.dur!"minutes" > Clock.currSystemTick) {}
-                logger.logInfo("Timeout. Exiting");
-                return 0;
-            }); 
+		// For windows is important to use absolute path for logging
+		version(Windows) string logFilePath = "C:\\logfile.log";
+		else string logFilePath = "logfile.log";
+		
+        auto logger = new shared StrictLogger(logFilePath);
+        return buildDaemon!daemon.run(logger); 
     }
 }
 version(DaemonClient)
@@ -70,9 +79,9 @@ version(DaemonClient)
     // For client you don't need full description of the daemon
     // the truncated description consists only of name and a list of
     // supported signals
-    alias daemon = DaemonClient!(
+    alias client = DaemonClient!(
         "DaemonizeExample2",
-        Signal.Terminate,
+        Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown, Signal.Stop),
         Signal.HangUp,
         RotateLogSignal,
         DoSomethingSignal
@@ -80,11 +89,24 @@ version(DaemonClient)
     
     void main()
     {
-        sendSignal!daemon(Signal.HangUp);
-        sendSignal!daemon(RotateLogSignal);
-        sendSignal!daemon(DoSomethingSignal);
+    	auto logger = new shared StrictLogger("client.log");
+    	
+    	alias daemon = buildDaemon!client;
+    	alias send = daemon.sendSignal;
+    	alias uninstall = daemon.uninstall;
+    	
+        send(logger, Signal.HangUp);
+        send(logger, RotateLogSignal);
+        send(logger, DoSomethingSignal);
         
-        Thread.sleep(1.dur!"seconds");        
-        sendSignal!daemon(Signal.Terminate);
+        Thread.sleep(500.dur!"msecs");        
+        send(logger, Signal.Terminate);
+        
+        // For windows services are remain in SC manager until uninstalled manually
+        version(Windows)
+        {
+        	Thread.sleep(500.dur!"msecs");
+        	uninstall(logger);
+    	}
     }
 }

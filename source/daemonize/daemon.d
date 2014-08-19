@@ -220,7 +220,7 @@ template DaemonClient(
 {
     private template isSignal(T...)
     {
-        enum isSignal = is(typeof(T[0]) == Signal);
+        enum isSignal = is(typeof(T[0]) == Signal) || isComposition!(T[0]);
     }
     
     static assert(allSatisfy!(isSignal, Signals), "All values of Signals parameter have to be of Signal type!");
@@ -234,7 +234,7 @@ template isDaemonClient(alias T)
 {
     private template isSignal(T...)
     {
-        enum isSignal = is(typeof(T[0]) == Signal);
+        enum isSignal = is(typeof(T[0]) == Signal) || isComposition!(T[0]);
     }
     
     static if(__traits(compiles, T.daemonName) && __traits(compiles, T.signals))
