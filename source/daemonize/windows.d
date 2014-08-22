@@ -26,6 +26,18 @@ import daemonize.string;
 import daemonize.keymap;
 import dlogg.log;
 
+/// Windows version doesn't use pid files
+string defaultPidFile(string daemonName)
+{
+    return "";  
+}
+
+/// Windows version doesn't use lock files
+string defaultLockFile(string daemonName)
+{
+    return "";  
+}
+
 /// Checks is $(B sig) is actually built-in
 @nogc @safe bool isNativeSignal(Signal sig) pure nothrow 
 {
@@ -304,8 +316,7 @@ template buildDaemon(alias DaemonInfo)
                         {
                             foreach(subsignal; signal.signals)
                             {
-                                enum nativeCode = daemon.mapSignal(subsignal);
-                                case(nativeCode):
+                                case(daemon.mapSignal(subsignal)):
                                 {
                                     savedLogger.logInfo(text("Caught signal ", subsignal));
                                     bool res = true;
@@ -328,8 +339,7 @@ template buildDaemon(alias DaemonInfo)
                         }
                         else 
                         {
-                            enum nativeCode = daemon.mapSignal(signal);
-                            case(nativeCode):
+                            case(daemon.mapSignal(signal)):
                             {
                                 savedLogger.logInfo(text("Caught signal ", signal));
                                 bool res = true;
