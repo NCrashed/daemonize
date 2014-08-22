@@ -61,12 +61,12 @@ import dlogg.log;
 template buildDaemon(alias DaemonInfo)
     if(isDaemon!DaemonInfo || isDaemonClient!DaemonInfo)
 {
-/// Support functions
-private alias daemon = readDaemonInfo!DaemonInfo;
-
-// DaemonClient cannot run daemon
-static if(isDaemon!DaemonInfo)
-{
+    /// Support functions
+    private alias daemon = readDaemonInfo!DaemonInfo;
+    
+    // DaemonClient cannot run daemon
+    static if(isDaemon!DaemonInfo)
+    {
         /**
         *    Starts daemon that is described by $(B DaemonInfo). Daemon is implemented as
         *    windows service and auto-installed in SC manager. If you want to uninstall the
@@ -250,8 +250,12 @@ static if(isDaemon!DaemonInfo)
             {
                 try
                 {
+                    // Windows don't know anything about our runtime
+                    // so register the thread at druntime's thread subsystem
+                    // and manually run all TLS constructors and destructors
                     thread_attachThis();
-                    rt_moduleTlsCtor(); scope(exit) rt_moduleTlsDtor();
+                    rt_moduleTlsCtor(); 
+                    scope(exit) rt_moduleTlsDtor();
                     
                     int code = EXIT_FAILURE;
     
@@ -269,15 +273,12 @@ static if(isDaemon!DaemonInfo)
                         return;
                     }
                     
-                    debug alias WhatToCatch = Throwable;
-                    else  alias WhatToCatch = Exception;
-                    
                     savedLogger.logInfo("Running user main delegate");
                     reportServiceStatus(SERVICE_RUNNING, NO_ERROR, 0.dur!"msecs");
                     try code = DaemonInfo.mainFunc(savedLogger, &shouldExit);
-                    catch (WhatToCatch ex) 
+                    catch (Throwable ex) 
                     {
-                        savedLogger.logError(text("Catched unhandled exception in daemon level at ", ex.file, ":", ex.line, ": ", ex.msg));
+                        savedLogger.logError(text("Catched unhandled throwable at daemon level at ", ex.file, ":", ex.line, ": ", ex.msg));
                         savedLogger.logError("Terminating...");
                         reportServiceStatus(SERVICE_STOPPED, EXIT_FAILURE, 0.dur!"msecs");
                         return;
@@ -286,7 +287,7 @@ static if(isDaemon!DaemonInfo)
                 }
                 catch(Throwable th)
                 {
-                    savedLogger.logError(text("Internal daemon error, please bug report: ", th.msg));
+                    savedLogger.logError(text("Internal daemon error, please bug report: ", th.file, ":", th.line, ": ", th.msg));
                     savedLogger.logError("Terminating...");
                 }
             }
