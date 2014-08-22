@@ -25,6 +25,8 @@ alias daemon = Daemon!(
     
     // Setting associative map signal -> callbacks
     KeyValueList!(
+        // You can bind same delegate for several signals by Composition template
+        // delegate can take additional argument to know which signal is caught
         Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown, Signal.Stop), (logger, signal)
         {
             logger.logInfo("Exiting...");

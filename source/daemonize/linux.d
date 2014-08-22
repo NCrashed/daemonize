@@ -225,7 +225,7 @@ template buildDaemon(alias DaemonInfo)
             }
     
             int code = EXIT_FAILURE;
-            try code = DaemonInfo.mainFunc(savedLogger, () {return false;} );
+            try code = DaemonInfo.mainFunc(savedLogger, &shouldExitFunc );
             catch (Throwable th) 
             {
                 savedLogger.logError(text("Catched unhandled throwable at daemon level at ", th.file, ": ", th.line, " : ", th.msg));
@@ -235,9 +235,9 @@ template buildDaemon(alias DaemonInfo)
             {
                 deleteLockFile(lockFilePath);
                 deletePidFile(pidFilePath);
-                terminate(code);
             }
             
+            terminate(code);
             return 0;
         }
     }
@@ -307,6 +307,13 @@ template buildDaemon(alias DaemonInfo)
         string savedPidFilePath;
         string savedLockFilePath;
         
+        __gshared bool shouldExit;
+        
+        bool shouldExitFunc()
+        {
+            return shouldExit;
+        } 
+        
         /// Actual signal handler
         static if(isDaemon!DaemonInfo) extern(C) void signal_handler_daemon(int sig) nothrow
         {
@@ -332,7 +339,8 @@ template buildDaemon(alias DaemonInfo)
                                     deleteLockFile(savedLockFilePath);
                                     deletePidFile(savedPidFilePath);
                                     
-                                    terminate(EXIT_SUCCESS);
+                                    shouldExit = true;
+                                    //terminate(EXIT_SUCCESS);
                                 } 
                                 else return;
                                 
@@ -358,7 +366,8 @@ template buildDaemon(alias DaemonInfo)
                                 deleteLockFile(savedLockFilePath);
                                 deletePidFile(savedPidFilePath);
                                 
-                                terminate(EXIT_SUCCESS);
+                                shouldExit = true;
+                                //terminate(EXIT_SUCCESS);
                             } 
                             else return;
                         } 

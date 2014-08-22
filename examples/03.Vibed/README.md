@@ -25,13 +25,13 @@ alias daemon = Daemon!(
     "DaemonizeExample3", // unique name
     
     KeyValueList!(
-        Signal.Terminate, (logger)
+        Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown, Signal.Stop), (logger)
         {
             logger.logInfo("Exiting...");
             
             // No need to force exit here
             // main will stop after the call 
-            exitEventLoop();
+            exitEventLoop(true);
             return true; 
         },
         Signal.HangUp, (logger)
@@ -39,8 +39,22 @@ alias daemon = Daemon!(
             logger.logInfo("Hello World!");
             return true;
         }
-    )
+    ),
+    
+    // Default vibe initialization should be performed after daemon forking as inner vibe resources are thread local
+    (logger, shouldExit) {
+        // Default vibe initialization
+        auto settings = new HTTPServerSettings;
+        settings.port = 8080;
+        settings.bindAddresses = ["127.0.0.1"];
+
+        listenHTTP(settings, &handleRequest);
+
+        // All exceptions are caught by daemonize
+        return runEventLoop();
+    }
 );
+
 ```
 
 The simpliest vibe handler that responds with `"Hello World!"` to any request:
@@ -59,26 +73,18 @@ int main()
     // Setting vibe logger 
     // daemon closes stdout/stderr and vibe logger will crash
     // if not suppress printing to console
-    enum vibeLogName = "vibe.log";
-    setLogLevel(VibeLogLevel.none); // no stdout/stderr output
-    setLogFile(vibeLogName, VibeLogLevel.info);
-    setLogFile(vibeLogName, VibeLogLevel.error);
-    setLogFile(vibeLogName, VibeLogLevel.warn);
-```
+    version(Windows) enum vibeLogName = "C:\\vibe.log";
+    else enum vibeLogName = "vibe.log";
 
-Default vibe initialization should be performed after daemon forking:
-```D
-    auto logger = new shared StrictLogger("logfile.log");
-    return runDaemon!daemon(logger, 
-        () {
-            // Default vibe initialization
-            auto settings = new HTTPServerSettings;
-            settings.port = 8080;
-            settings.bindAddresses = ["127.0.0.1"];
-            
-            listenHTTP(settings, &handleRequest);
-        
-            // All exceptions are caught by daemonize
-            return runEventLoop();
-        }); 
+    // no stdout/stderr output
+    version(Windows) {}
+    else setLogLevel(VibeLogLevel.none);
+
+    setLogFile(vibeLogName, VibeLogLevel.info);
+
+    version(Windows) enum logFileName = "C:\\logfile.log";
+    else enum logFileName = "logfile.log";
+    
+    auto logger = new shared StrictLogger(logFileName);
+    return buildDaemon!daemon.run(logger); 
 ```

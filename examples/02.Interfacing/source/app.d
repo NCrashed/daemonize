@@ -64,8 +64,8 @@ version(DaemonServer)
     int main()
     {
         // For windows is important to use absolute path for logging
-		      version(Windows) string logFilePath = "C:\\logfile.log";
-		      else string logFilePath = "logfile.log";
+        version(Windows) string logFilePath = "C:\\logfile.log";
+        else string logFilePath = "logfile.log";
 		
         auto logger = new shared StrictLogger(logFilePath);
         return buildDaemon!daemon.run(logger); 

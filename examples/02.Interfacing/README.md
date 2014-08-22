@@ -32,14 +32,14 @@ enum DoSomethingSignal = "DoSomething".customSignal;
 
 Cusom signals are mapped to realtime signals in GNU\Linux platform and to winapi events in Windows.
 
-Daemon description is similar to [Example 01]() one:
+Daemon description is similar to [Example 01](https://github.com/NCrashed/daemonize/tree/master/examples/01.HelloWorld) one:
 ```D
     // Full description for daemon side
     alias daemon = Daemon!(
         "DaemonizeExample2",
         
         KeyValueList!(
-            Signal.Terminate, (logger)
+            Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown, Signal.Stop), (logger)
             {
                 logger.logInfo("Exiting...");
                 return false;
@@ -60,20 +60,29 @@ Daemon description is similar to [Example 01]() one:
                 logger.logInfo("Doing something...");
                 return true;
             }
-        )
+        ),
+        
+        (logger, shouldExit) 
+        {
+            // will stop the daemon in 5 minutes
+            auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
+            bool timeout = false;
+            while(!shouldExit() && time > Clock.currSystemTick) {  }
+            
+            logger.logInfo("Exiting main function!");
+            
+            return 0;
+        }
     );
     
     int main()
     {
-        auto logger = new shared StrictLogger("daemon.log");
-        return runDaemon!daemon(logger, 
-            () {
-                // will stop the daemon in 5 minutes
-                auto time = Clock.currSystemTick;
-                while(time + cast(TickDuration)5.dur!"minutes" > Clock.currSystemTick) {}
-                logger.logInfo("Timeout. Exiting");
-                return 0;
-            }); 
+        // For windows is important to use absolute path for logging
+        version(Windows) string logFilePath = "C:\\logfile.log";
+        else string logFilePath = "logfile.log";
+        
+        auto logger = new shared StrictLogger(logFilePath);
+        return buildDaemon!daemon.run(logger); 
     }
 ```
 
@@ -95,9 +104,12 @@ First you need a simplified description of the daemon (note: you can use full de
 Using the $(daemon) description `daemonize` is able recalculate signals mapping. Sending signals 
 now as simple as:
 ```D
-    sendSignal!daemon(Signal.HangUp);
-    sendSignal!daemon(RotateLogSignal);
-    sendSignal!daemon(DoSomethingSignal);
+    alias daemon = buildDaemon!client;
+    alias send = daemon.sendSignal;
+
+    send(logger, Signal.HangUp);
+    send(logger, RotateLogSignal);
+    send(logger, DoSomethingSignal);
 ```
 
 Manual signal sending
@@ -108,8 +120,22 @@ index:
 ```
     signal_id = NumberOfCustomSignalInDescription + SIGRTMIN (or __libc_current_sigrtmin)
 ```
-
+Or for windows (the id could be sent via `ControlService` winapi function):
+```
+    signal_id = NumberOfCustomSignalInDescription + 128;
+```
 `NumberOfCustomSignalInDescription` - counts only custom signals, native ones are skipped.
 
-In Windows you simply creates event with `CreateEvent` with signal name that you used with `customSignal` and
-raises it on demand.
+Uninstalling windows service
+============================
+Windows implementation uses service API and registers the daemon in global service manager.
+You can uninstall the service via system tool:
+```
+> C:\Windows\System32\sc delete <ServiceName>
+```
+
+Or by calling:
+```D
+alias daemon = buildDaemon!client;
+daemon.uninstall(logger);
+```

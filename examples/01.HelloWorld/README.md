@@ -31,11 +31,14 @@ Next goes info about signals that should be caught and processed. Some signals a
 native linux signals are transformed to corresponding events (see also *here insert link to wiki*). 
 
 You can bind one delegate for each native and custom signal (processed by realtime signals in linux). If
-you return false - daemon terminates. Also the daemon logger is passed into each signal handler:
+you return false - `shouldExit` function in daemon main will return true. 
+Also the daemon logger is passed into each signal handler:
 ```D
     // Setting associative map signal -> callbacks
     KeyValueList!(
-        Signal.Terminate, (logger)
+        // You can bind same delegate for several signals by Composition template
+        // delegate can take additional argument to know which signal is caught
+        Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown, Signal.Stop), (logger, signal)
         {
             logger.logInfo("Exiting...");
             return false; // returning false will terminate daemon
@@ -49,34 +52,47 @@ you return false - daemon terminates. Also the daemon logger is passed into each
 );
 ```
 
+Main function of the daemon goes further:
+```D
+    (logger, shouldExit) {
+        // will stop the daemon in 5 minutes
+        auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
+        bool timeout = false;
+        while(!shouldExit() && time > Clock.currSystemTick) {  }
+        
+        logger.logInfo("Exiting main function!");
+        
+        return 0;
+    }
+```
+`shouldExit` should be `int function(shared ILogger, bool function())` type and is used to stop main function from
+signal callbacks. As soon as main delegate returns, the daemon terminates. At the example the daemon will auto-stop after 5 minutes.
+
+
 And last step is starting the daemon. Before the daemon is ran, you should initialize a logger:
 ```D
 int main()
 {
-    auto logger = new shared StrictLogger("logfile.log");
+    // For windows is important to use absolute path for logging
+    version(Windows) string logFilePath = "C:\\logfile.log";
+    else string logFilePath = "logfile.log";
+    
+    auto logger = new shared StrictLogger(logFilePath);
 ```
 
 And then:
 ```D
-    return runDaemon!daemon(logger, 
-            // Main function where your code is
-            () {
-                // will stop the daemon in 5 minutes
-                auto time = Clock.currSystemTick;
-                while(time + cast(TickDuration)5.dur!"minutes" > Clock.currSystemTick) {}
-                logger.logInfo("Timeout. Exiting");
-                return 0; // return code
-            }); 
+    return buildDaemon!daemon.run(logger); 
 }
 ```
 
-`runDaemon` function takes daemon description, logger and main delegate (see also for additional params *docs link*).
-As soon as main delegate returns, the daemon terminates. At the example the daemon will auto-stop after 5 minutes.
+`buildDaemon` template takes daemon description and provides a set of functions (see also *wiki link*) to control described daemon.
+`run` function takes initiated logger and starts the daemon.
 
 Pid and lock files
 ==================
 By default daemonize creates pid and lock files at `"~/.daemonize/$(daemon_name)[.pid,.lock]"` (or `"%appdata%/.daemonize/%daemon_name%[.pid,.lock]"` for Windows).
-To change the behavior you can pass the paths into `runDaemon` function.
+To change the behavior you can pass the paths into `run` function.
 
 Privileges lowing
 ==================
