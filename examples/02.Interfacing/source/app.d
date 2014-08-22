@@ -52,9 +52,7 @@ version(DaemonServer)
         {
             // will stop the daemon in 5 minutes
             auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
-            bool timeout = false;
             while(!shouldExit() && time > Clock.currSystemTick) {  }
-            
             logger.logInfo("Exiting main function!");
             
             return 0;
@@ -95,11 +93,12 @@ version(DaemonClient)
     	alias send = daemon.sendSignal;
     	alias uninstall = daemon.uninstall;
     	
-        send(logger, Signal.HangUp);
-        send(logger, RotateLogSignal);
-        send(logger, DoSomethingSignal);
-        
-        Thread.sleep(500.dur!"msecs");        
+        send(logger, Signal.HangUp); 
+        Thread.sleep(50.dur!"msecs");
+        send(logger, RotateLogSignal); 
+        Thread.sleep(50.dur!"msecs");
+        send(logger, DoSomethingSignal);         
+        Thread.sleep(50.dur!"msecs");
         send(logger, Signal.Terminate);
         
         // For windows services are remain in SC manager until uninstalled manually

@@ -267,9 +267,9 @@ template buildDaemon(alias DaemonInfo)
         
         // Reading file
         int pid = readPidFile(pidFilePath);
-        
-        logger.logInfo(text("Sending signal ", signal, " to daemon ", daemonName));
-        kill(pid, readDaemonInfo!DaemonInfo.mapSignal(signal));
+
+        logger.logInfo(text("Sending signal ", signal, " to daemon ", daemonName, " (pid ", pid, ")"));
+        kill(pid, daemon.mapSignal(signal));
     }
     
     /// ditto
