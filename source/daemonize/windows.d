@@ -230,6 +230,24 @@ template buildDaemon(alias DaemonInfo)
             throw new LoggedException(text("Failed to send signal to service ", serviceName, ". Details: ", getLastErrorDescr));
     }
     
+    /**
+    *   Saves info about exception into daemon $(B logger)
+    */
+    static class LoggedException : Exception
+    {
+        @safe nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+        {
+            savedLogger.logError(msg);
+            super(msg, file, line, next);
+        }
+    
+        @safe nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
+        {
+            savedLogger.logError(msg);
+            super(msg, file, line, next);
+        }
+    }
+
     private
     {
         __gshared SERVICE_STATUS serviceStatus;
@@ -239,21 +257,6 @@ template buildDaemon(alias DaemonInfo)
         bool shouldExit()
         {
             return serviceStatus.dwCurrentState == SERVICE_STOPPED;
-        }
-        
-        static class LoggedException : Exception
-        {
-            @safe nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
-            {
-                savedLogger.logError(msg);
-                super(msg, file, line, next);
-            }
-        
-            @safe nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
-            {
-                savedLogger.logError(msg);
-                super(msg, file, line, next);
-            }
         }
         
         static if(isDaemon!DaemonInfo)

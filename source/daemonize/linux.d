@@ -257,7 +257,7 @@ template buildDaemon(alias DaemonInfo)
     *
     *   See_Also: $(B sendSignal) version of the function that takes daemon name from $(B DaemonInfo). 
     */
-    void sendSignalDynamic(string daemonName, Signal signal, string pidFilePath = "")
+    void sendSignalDynamic(shared ILogger logger, string daemonName, Signal signal, string pidFilePath = "")
     {
         // Try to find at default place
         if(pidFilePath == "")
@@ -268,19 +268,38 @@ template buildDaemon(alias DaemonInfo)
         // Reading file
         int pid = readPidFile(pidFilePath);
         
+        logger.logInfo(text("Sending signal ", signal, " to daemon ", daemonName));
         kill(pid, readDaemonInfo!DaemonInfo.mapSignal(signal));
     }
     
     /// ditto
-    void sendSignal(Signal signal, string pidFilePath = "")
+    void sendSignal(shared ILogger logger, Signal signal, string pidFilePath = "")
     {
-        sendSignalDynamic(DaemonInfo.daemonName, signal, pidFilePath);
+        sendSignalDynamic(logger, DaemonInfo.daemonName, signal, pidFilePath);
     }
 
     /**
     *   In GNU/Linux daemon doesn't require deinstallation.
     */
     void uninstall() {}
+    
+    /**
+    *   Saves info about exception into daemon $(B logger)
+    */
+    static class LoggedException : Exception
+    {
+        @safe nothrow this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+        {
+            savedLogger.logError(msg);
+            super(msg, file, line, next);
+        }
+    
+        @safe nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
+        {
+            savedLogger.logError(msg);
+            super(msg, file, line, next);
+        }
+    }
     
     private
     {   
@@ -289,7 +308,7 @@ template buildDaemon(alias DaemonInfo)
         string savedLockFilePath;
         
         /// Actual signal handler
-        extern(C) void signal_handler_daemon(int sig) nothrow
+        static if(isDaemon!DaemonInfo) extern(C) void signal_handler_daemon(int sig) nothrow
         {
             foreach(signal; DaemonInfo.signalMap.keys)
             {
@@ -490,6 +509,16 @@ template buildDaemon(alias DaemonInfo)
             
             exit(code);
         }
+        
+        /// Tries to read a number from $(B filename)
+        int readPidFile(string filename)
+        {
+            if(!filename.exists)
+                throw new LoggedException("Cannot find pid file at '" ~ filename ~ "'!");
+            
+            auto file = File(filename, "r");
+            return file.readln.to!int;
+        }
     }
 }
 private
@@ -519,15 +548,6 @@ private
         alias void function(int) sighandler_t;
         sighandler_t signal(int signum, sighandler_t handler);
         char* strerror(int errnum) pure;
-    }
-    
-    /// Tries to read a number from $(B filename)
-    int readPidFile(string filename)
-    {
-        enforce(filename.exists, "Cannot find pid file at '" ~ filename ~ "'!");
-        
-        auto file = File(filename, "r");
-        return file.readln.to!int;
     }
     
     /// Handles utilities for signal mapping from local representation to GNU/Linux one
