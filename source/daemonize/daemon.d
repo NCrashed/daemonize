@@ -144,7 +144,19 @@ template isComposition(alias T)
 *               logger.logInfo("Hello World!");
 *               return true; // continue execution
 *           }
-*       )
+*       ),
+*
+*       (logger, shouldExit) 
+*       {
+*           // will stop the daemon in 5 minutes
+*           auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
+*           bool timeout = false;
+*           while(!shouldExit() && time > Clock.currSystemTick) {  }
+*       
+*           logger.logInfo("Exiting main function!");
+*       
+*           return 0;
+*       }
 *   );
 *   -----------
 */
@@ -201,7 +213,11 @@ template isDaemon(alias T)
 *               logger.logInfo("Doing something...");
 *               return true;
 *           }
-*       )
+*       ),
+*       (logger, shouldExit) 
+*       {
+*           // some code
+*       }
 *   );
 *
 *   // Truncated description for client

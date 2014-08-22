@@ -52,9 +52,9 @@ alias daemon = Daemon!(
 
 int main()
 {
-	// For windows is important to use absolute path for logging
-	version(Windows) string logFilePath = "C:\\logfile.log";
-	else string logFilePath = "logfile.log";
+   	// For windows is important to use absolute path for logging
+   	version(Windows) string logFilePath = "C:\\logfile.log";
+   	else string logFilePath = "logfile.log";
 	
     return buildDaemon!daemon.run(new shared StrictLogger(logFilePath)); 
 }

@@ -50,22 +50,22 @@ version(DaemonServer)
         
         (logger, shouldExit) 
         {
-	        // will stop the daemon in 5 minutes
-	        auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
-	        bool timeout = false;
-	        while(!shouldExit() && time > Clock.currSystemTick) {  }
-	        
-	        logger.logInfo("Exiting main function!");
-	        
-	        return 0;
+            // will stop the daemon in 5 minutes
+            auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
+            bool timeout = false;
+            while(!shouldExit() && time > Clock.currSystemTick) {  }
+            
+            logger.logInfo("Exiting main function!");
+            
+            return 0;
         }
     );
     
     int main()
     {
-		// For windows is important to use absolute path for logging
-		version(Windows) string logFilePath = "C:\\logfile.log";
-		else string logFilePath = "logfile.log";
+        // For windows is important to use absolute path for logging
+		      version(Windows) string logFilePath = "C:\\logfile.log";
+		      else string logFilePath = "logfile.log";
 		
         auto logger = new shared StrictLogger(logFilePath);
         return buildDaemon!daemon.run(logger); 

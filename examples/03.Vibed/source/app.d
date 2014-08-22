@@ -31,7 +31,7 @@ alias daemon = Daemon!(
             
             // No need to force exit here
             // main will stop after the call 
-            exitEventLoop();
+            exitEventLoop(true);
             return true; 
         },
         Signal.HangUp, (logger)
@@ -46,9 +46,9 @@ alias daemon = Daemon!(
         auto settings = new HTTPServerSettings;
         settings.port = 8080;
         settings.bindAddresses = ["127.0.0.1"];
-        
+
         listenHTTP(settings, &handleRequest);
-    
+
         // All exceptions are caught by daemonize
         return runEventLoop();
     }
@@ -67,15 +67,16 @@ int main()
     // daemon closes stdout/stderr and vibe logger will crash
     // if not suppress printing to console
     version(Windows) enum vibeLogName = "C:\\vibe.log";
-	else enum vibeLogName = "vibe.log";
-	
-    setLogLevel(VibeLogLevel.none); // no stdout/stderr output
+    else enum vibeLogName = "vibe.log";
+
+    // no stdout/stderr output
+    version(Windows) {}
+    else setLogLevel(VibeLogLevel.none);
+
     setLogFile(vibeLogName, VibeLogLevel.info);
-    setLogFile(vibeLogName, VibeLogLevel.error);
-    setLogFile(vibeLogName, VibeLogLevel.warn);
-            
+
     version(Windows) enum logFileName = "C:\\logfile.log";
-	else enum logFileName = "logfile.log";
+    else enum logFileName = "logfile.log";
 	
     auto logger = new shared StrictLogger(logFileName);
     return buildDaemon!daemon.run(logger); 
