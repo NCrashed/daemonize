@@ -1,8 +1,8 @@
 Example 03 Integration with vibe.d
 ==================================
 
-The example shows how to create vibe.d daemon. The example http server binds
-to localhost:8080 and responds with simple hello-world page.
+The example shows how to create [vibe.d](http://vibed.org/) daemon. The example http server binds
+to `localhost:8080` and responds with simple hello-world page.
 
 Explanation
 ===========
