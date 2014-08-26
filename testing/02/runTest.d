@@ -5,7 +5,7 @@ import std.file;
 import core.thread;
 import core.time;
 
-enum testNumber = 1;
+enum testNumber = 2;
 
 void customShell(string command, lazy string error)
 {
