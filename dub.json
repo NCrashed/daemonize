@@ -1,24 +1,24 @@
 {
-	"name" : "daemonize",
-	"description": "Library that simplifies creation of daemons for GNU\Linux and services for Windows.",
-	"copyright": "Copyright © 2014, Anton Gushcha",
-	"authors": ["NCrashed <ncrashed@gmail.com>"],
-	"license": "MIT",
-	"configurations": [
-		{
-			"name": "default",
-			"dependencies" : {
-				"dlogg": ">=0.3.2" 
-			}
-		},
-		{
-			"name": "colorized",
-			"dependencies" : {
-				"dlogg": ">=0.3.2"
-			},
-			"subConfigurations" : {
-				"dlogg": "colorized"
-			}
-		}
-	]
+    "name" : "daemonize",
+    "description": "Library that simplifies creation of daemons for GNU\Linux and services for Windows.",
+    "copyright": "Copyright © 2014, Anton Gushcha",
+    "authors": ["NCrashed <ncrashed@gmail.com>"],
+    "license": "MIT",
+    "configurations": [
+        {
+            "name": "default",
+            "dependencies" : {
+                "dlogg": ">=0.3.2" 
+            }
+        },
+        {
+            "name": "colorized",
+            "dependencies" : {
+                "dlogg": ">=0.3.3"
+            },
+            "subConfigurations" : {
+                "dlogg": "colorized"
+            }
+        }
+    ]
 }
