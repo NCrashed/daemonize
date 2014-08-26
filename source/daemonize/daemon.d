@@ -31,7 +31,7 @@ static if( __VERSION__ < 2066 ) private enum nogc;
 */
 enum Signal : string
 {
-	// Linux native requests
+    // Linux native requests
     Abort     = "Abort",
     Terminate = "Terminate",
     Quit      = "Quit",
