@@ -212,6 +212,8 @@ template buildDaemon(alias DaemonInfo)
         
         if(!ControlService(service, daemon.mapSignal(sig), &serviceStatus))
             throw new LoggedException(text("Failed to send signal to service ", DaemonInfo.daemonName, ". Details: ", getLastErrorDescr));
+            
+        logger.logInfo(text("Sending signal ", sig, " to daemon ", DaemonInfo.daemonName));
     }
     
     /// ditto with dynamic service name
@@ -223,11 +225,13 @@ template buildDaemon(alias DaemonInfo)
         scope(exit) CloseServiceHandle(manager);
         
         auto service = OpenServiceW(manager, cast(LPWSTR)serviceName.toUTF16z, daemon.getControlAccessFlag(sig));
-        if(service is null)    throw new LoggedException(text("Failed to open service! ", getLastErrorDescr));
+        if(service is null) throw new LoggedException(text("Failed to open service! ", getLastErrorDescr));
         scope(exit) CloseServiceHandle(service);
         
         if(!ControlService(service, daemon.mapSignal(sig), &serviceStatus))
             throw new LoggedException(text("Failed to send signal to service ", serviceName, ". Details: ", getLastErrorDescr));
+            
+        logger.logInfo(text("Sending signal ", sig, " to daemon ", serviceName));
     }
     
     /**
