@@ -1,0 +1,10 @@
+{
+	"name" : "daemonize-test-01",
+	"copyright": "© 2014 Anton Gushcha",
+	"description" : "Test for TravisCI",
+	"license": "MIT",
+	"authors": ["Anton Gushcha (NCrashed) <ncrashed@gmail.com>"],
+	"dependencies" : {
+		"daemonize": {"version": "~master", "path": "../.."}  
+	}
+}

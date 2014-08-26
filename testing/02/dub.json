@@ -1,0 +1,48 @@
+{
+	"name" : "daemonize-test-02",
+	"copyright": "© 2014 Anton Gushcha",
+	"description" : "Test for TravisCI",
+	"license": "MIT",
+	"authors": ["Anton Gushcha (NCrashed) <ncrashed@gmail.com>"],
+	"dependencies" : {
+		"daemonize": {"version": "~master", "path": "../.."}  
+	},
+	"configurations": [
+		{
+			"name": "server",
+			"targetType": "executable",
+			"targetName": "test2-daemon",
+			"versions": ["Server"]
+		},
+		{
+			"name": "test1",
+			"targetType": "executable",
+			"targetName": "test2-client",
+			"versions": ["Test1"]
+		},
+		{
+			"name": "test2",
+			"targetType": "executable",
+			"targetName": "test2-client",
+			"versions": ["Test2"]
+		},
+		{
+			"name": "test3",
+			"targetType": "executable",
+			"targetName": "test2-client",
+			"versions": ["Test3"]
+		},
+		{
+			"name": "test4",
+			"targetType": "executable",
+			"targetName": "test2-client",
+			"versions": ["Test4"]
+		},
+		{
+			"name": "test5",
+			"targetType": "executable",
+			"targetName": "test2-client",
+			"versions": ["Test5"]
+		}		
+	]
+}

@@ -259,6 +259,8 @@ template buildDaemon(alias DaemonInfo)
     */
     void sendSignalDynamic(shared ILogger logger, string daemonName, Signal signal, string pidFilePath = "")
     {
+        savedLogger = logger;
+        
         // Try to find at default place
         if(pidFilePath == "")
         {
@@ -329,7 +331,7 @@ template buildDaemon(alias DaemonInfo)
                         {
                             try
                             {
-                                static if(__traits(compiles, handler(savedLogger, subsignal)))
+                                static if(__traits(compiles, {handler(savedLogger, subsignal);}))
                                     bool res = handler(savedLogger, subsignal);
                                 else
                                     bool res = handler(savedLogger);
@@ -522,6 +524,7 @@ template buildDaemon(alias DaemonInfo)
         /// Tries to read a number from $(B filename)
         int readPidFile(string filename)
         {
+            std.stdio.writeln(filename);
             if(!filename.exists)
                 throw new LoggedException("Cannot find pid file at '" ~ filename ~ "'!");
             
