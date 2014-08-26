@@ -1,7 +1,7 @@
 {
     "name" : "daemonize",
     "description": "Library that simplifies creation of daemons for GNU\Linux and services for Windows.",
-    "copyright": "Copyright © 2014, Anton Gushcha",
+    "copyright": "Copyright (c) 2014, Anton Gushcha",
     "authors": ["NCrashed <ncrashed@gmail.com>"],
     "license": "MIT",
     "configurations": [
