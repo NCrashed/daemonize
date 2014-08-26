@@ -1,3 +1,5 @@
+[![Gitter chat](https://badges.gitter.im/NCrashed/daemonize.png)](https://gitter.im/NCrashed/daemonize)
+
 daemonize
 =========
 
