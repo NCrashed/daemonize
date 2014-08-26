@@ -1,4 +1,5 @@
 [![Gitter chat](https://badges.gitter.im/NCrashed/daemonize.png)](https://gitter.im/NCrashed/daemonize)
+[![Build Status](https://travis-ci.org/NCrashed/daemonize.svg?branch=master)](https://travis-ci.org/NCrashed/daemonize)
 
 daemonize
 =========
