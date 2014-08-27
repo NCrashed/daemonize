@@ -87,4 +87,5 @@ int main()
     
     auto logger = new shared StrictLogger(logFileName);
     return buildDaemon!daemon.run(logger); 
+}
 ```
