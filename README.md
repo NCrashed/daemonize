@@ -8,7 +8,7 @@ Cross-platform library for wrapping D applications into daemons (GNU/Linux) and 
 
 [API documentation](https://github.com/NCrashed/daemonize/wiki/Daemon-API)
 
-Examples
+Examples (can work on D2.066.1)
 ========
 1. [Hello World](https://github.com/NCrashed/daemonize/tree/master/examples/01.HelloWorld)
 2. [Interfacing](https://github.com/NCrashed/daemonize/tree/master/examples/02.Interfacing)
