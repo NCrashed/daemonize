@@ -1,4 +1,4 @@
-// This file is written in D programming language
+﻿// This file is written in D programming language
 /**
 *   The example demonstrates basic daemonize features. Described
 *   daemon responds to SIGTERM and SIGHUP signals.
@@ -21,7 +21,7 @@ import daemonize.d;
 
 // First you need to describe your daemon via template
 alias daemon = Daemon!(
-    "DaemonizeExample1", // unique name
+    "abc", // unique name
     
     // Setting associative map signal -> callbacks
     KeyValueList!(
@@ -32,7 +32,7 @@ alias daemon = Daemon!(
             logger.logInfo("Exiting...");
             return false; // returning false will terminate daemon
         },
-        Signal.HangUp, (logger)
+        Composition!(Signal.HangUp,Signal.Pause,Signal.Continue), (logger)
         {
             logger.logInfo("Hello World!");
             return true; // continue execution
@@ -53,9 +53,9 @@ alias daemon = Daemon!(
 
 int main()
 {
-    // For windows is important to use absolute path for logging
-    version(Windows) string logFilePath = "C:\\logfile.log";
-    else string logFilePath = "logfile.log";
+   	// For windows is important to use absolute path for logging
+   	version(Windows) string logFilePath = "C:\\logfile.log";
+   	else string logFilePath = "logfile.log";
 	
     return buildDaemon!daemon.run(new shared StrictLogger(logFilePath)); 
 }
