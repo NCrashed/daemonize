@@ -8,6 +8,10 @@ Cross-platform library for wrapping D applications into daemons (GNU/Linux) and 
 
 [API documentation](https://github.com/NCrashed/daemonize/wiki/Daemon-API)
 
+Warning
+=======
+There are [issues](https://github.com/NCrashed/daemonize/issues/2) with GC deadlocks (GNU/Linux) with multi-threading.
+
 Examples (can work on D2.066.1)
 ========
 1. [Hello World](https://github.com/NCrashed/daemonize/tree/master/examples/01.HelloWorld)
