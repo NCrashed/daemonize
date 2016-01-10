@@ -514,8 +514,11 @@ template buildDaemon(alias DaemonInfo)
                 savedLogger.finalize();
             
                 gc_term();
-                _STD_critical_term();
-                _STD_monitor_staticdtor();
+                try {
+                    _d_critical_term();
+                    _d_monitor_staticdtor();
+                } catch (Exception ex) {
+                }
             }
             
             exit(code);
@@ -544,8 +547,11 @@ private
     extern (C) nothrow
     {
         // These are for control of termination
-        void _STD_monitor_staticdtor();
-        void _STD_critical_term();
+        // druntime rt.critical_
+        void _d_critical_term();
+        // druntime rt.monitor_
+        void _d_monitor_staticdtor();
+
         void gc_term();
         
         alias int pid_t;
