@@ -1,7 +1,7 @@
 // This file is written in D programming language
 /**
 *    Implementation of cross-platform daemon API for Windows platform.
-*    
+*
 *   Copyright: © 2013-2014 Anton Gushcha
 *   License: Subject to the terms of the MIT license, as written in the included LICENSE file.
 *   Authors: NCrashed <ncrashed@gmail.com>
@@ -29,17 +29,17 @@ import dlogg.log;
 /// Windows version doesn't use pid files
 string defaultPidFile(string daemonName)
 {
-    return "";  
+    return "";
 }
 
 /// Windows version doesn't use lock files
 string defaultLockFile(string daemonName)
 {
-    return "";  
+    return "";
 }
 
 /// Checks is $(B sig) is actually built-in
-@nogc @safe bool isNativeSignal(Signal sig) pure nothrow 
+@nogc @safe bool isNativeSignal(Signal sig) pure nothrow
 {
     switch(sig)
     {
@@ -58,7 +58,7 @@ string defaultLockFile(string daemonName)
 }
 
 /// Checks is $(B sig) is not actually built-in
-@nogc @safe bool isCustomSignal(Signal sig) pure nothrow 
+@nogc @safe bool isCustomSignal(Signal sig) pure nothrow
 {
     return !isNativeSignal(sig);
 }
@@ -75,7 +75,7 @@ template buildDaemon(alias DaemonInfo)
 {
     /// Support functions
     private alias daemon = readDaemonInfo!DaemonInfo;
-    
+
     // DaemonClient cannot run daemon
     static if(isDaemon!DaemonInfo)
     {
@@ -103,7 +103,7 @@ template buildDaemon(alias DaemonInfo)
         *   // First you need to describe your daemon via template
         *   alias daemon = Daemon!(
         *       "DaemonizeExample1", // unique name
-        *       
+        *
         *       // Setting associative map signal -> callbacks
         *       KeyValueList!(
         *           Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown, Signal.Stop), (logger, signal)
@@ -117,30 +117,30 @@ template buildDaemon(alias DaemonInfo)
         *               return true; // continue execution
         *           }
         *       ),
-        *       
+        *
         *       // Main function where your code is
         *       (logger, shouldExit) {
         *           // will stop the daemon in 5 minutes
         *           auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
         *           bool timeout = false;
         *           while(!shouldExit() && time > Clock.currSystemTick) {  }
-        *           
+        *
         *           logger.logInfo("Exiting main function!");
-        *           
+        *
         *           return 0;
         *       }
         *   );
-        *   
+        *
         *   //...
-        *   buildDaemon!daemon.run(new shared StrictLogger(logFilePath)); 
+        *   buildDaemon!daemon.run(new shared StrictLogger(logFilePath));
         *    ----------
         */
         int run(shared ILogger logger
             , string pidFilePath = "", string lockFilePath = ""
             , int userId = -1, int groupId = -1)
-        { 
+        {
             savedLogger = logger;
-            
+
             auto maybeStatus = queryServiceStatus();
             if(maybeStatus.isNull)
             {
@@ -148,9 +148,9 @@ template buildDaemon(alias DaemonInfo)
                 serviceInstall();
                 serviceStart();
                 return EXIT_SUCCESS;
-            } 
+            }
             else
-            {            
+            {
                 auto initResult = serviceInit();
                 if(initResult == ServiceInitState.NotService)
                 {
@@ -165,12 +165,12 @@ template buildDaemon(alias DaemonInfo)
                     savedLogger.logError("Service is already running!");
                     return EXIT_FAILURE;
                 }
-                
+
                 return EXIT_SUCCESS;
             }
         }
     }
-    
+
     /**
     *   Utility function that helps to uninstall the service from the system.
     *
@@ -179,7 +179,7 @@ template buildDaemon(alias DaemonInfo)
     void uninstall(shared ILogger logger)
     {
         savedLogger = logger;
-        
+
         auto maybeStatus = queryServiceStatus();
         if(!maybeStatus.isNull)
         {
@@ -190,7 +190,7 @@ template buildDaemon(alias DaemonInfo)
             savedLogger.logWarning("Cannot find service in SC manager! No uninstallation action is performed.");
         }
     }
-    
+
     /**
     *   Sends singal $(B sig) for described daemon. All signals are sent via $(B ControlService) WINAPI function.
     *
@@ -203,37 +203,37 @@ template buildDaemon(alias DaemonInfo)
     void sendSignal(shared ILogger logger, Signal sig, string pidFilePath = "")
     {
         savedLogger = logger;
-        
+
         auto manager = getSCManager;
         scope(exit) CloseServiceHandle(manager);
-        
+
         auto service = getService(manager, daemon.getControlAccessFlag(sig));
         scope(exit) CloseServiceHandle(service);
-        
+
         if(!ControlService(service, daemon.mapSignal(sig), &serviceStatus))
             throw new LoggedException(text("Failed to send signal to service ", DaemonInfo.daemonName, ". Details: ", getLastErrorDescr));
-            
+
         logger.logInfo(text("Sending signal ", sig, " to daemon ", DaemonInfo.daemonName));
     }
-    
+
     /// ditto with dynamic service name
     void sendSignalDynamic(shared ILogger logger, string serviceName, Signal sig, string pidFilePath = "")
     {
         savedLogger = logger;
-        
+
         auto manager = getSCManager;
         scope(exit) CloseServiceHandle(manager);
-        
+
         auto service = OpenServiceW(manager, cast(LPWSTR)serviceName.toUTF16z, daemon.getControlAccessFlag(sig));
         if(service is null) throw new LoggedException(text("Failed to open service! ", getLastErrorDescr));
         scope(exit) CloseServiceHandle(service);
-        
+
         if(!ControlService(service, daemon.mapSignal(sig), &serviceStatus))
             throw new LoggedException(text("Failed to send signal to service ", serviceName, ". Details: ", getLastErrorDescr));
-            
+
         logger.logInfo(text("Sending signal ", sig, " to daemon ", serviceName));
     }
-    
+
     /**
     *   Saves info about exception into daemon $(B logger)
     */
@@ -244,7 +244,7 @@ template buildDaemon(alias DaemonInfo)
             savedLogger.logError(msg);
             super(msg, file, line, next);
         }
-    
+
         @safe nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
         {
             savedLogger.logError(msg);
@@ -257,12 +257,12 @@ template buildDaemon(alias DaemonInfo)
         __gshared SERVICE_STATUS serviceStatus;
         __gshared SERVICE_STATUS_HANDLE serviceStatusHandle;
         shared ILogger savedLogger;
-        
+
         bool shouldExit()
         {
             return serviceStatus.dwCurrentState == SERVICE_STOPPED;
         }
-        
+
         static if(isDaemon!DaemonInfo)
         {
             extern(System) static void serviceMain(uint argc, wchar** args) nothrow
@@ -273,17 +273,17 @@ template buildDaemon(alias DaemonInfo)
                     // so register the thread at druntime's thread subsystem
                     // and manually run all TLS constructors and destructors
                     thread_attachThis();
-                    rt_moduleTlsCtor(); 
+                    rt_moduleTlsCtor();
                     scope(exit) rt_moduleTlsDtor();
-                    
+
                     int code = EXIT_FAILURE;
-    
+
                     serviceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
-                    
+
                     savedLogger.reload;
                     savedLogger.minOutputLevel = LoggingLevel.Muted;
                     savedLogger.logInfo("Registering control handler");
-                    
+
                     serviceStatusHandle = RegisterServiceCtrlHandlerW(cast(LPWSTR)DaemonInfo.daemonName.toUTF16z, &controlHandler);
                     if(serviceStatusHandle is null)
                     {
@@ -291,11 +291,11 @@ template buildDaemon(alias DaemonInfo)
                         savedLogger.logError(getLastErrorDescr);
                         return;
                     }
-                    
+
                     savedLogger.logInfo("Running user main delegate");
                     reportServiceStatus(SERVICE_RUNNING, NO_ERROR, 0.dur!"msecs");
                     try code = DaemonInfo.mainFunc(savedLogger, &shouldExit);
-                    catch (Throwable ex) 
+                    catch (Throwable ex)
                     {
                         savedLogger.logError(text("Catched unhandled throwable at daemon level at ", ex.file, ":", ex.line, ": ", ex.msg));
                         savedLogger.logError("Terminating...");
@@ -310,7 +310,7 @@ template buildDaemon(alias DaemonInfo)
                     savedLogger.logError("Terminating...");
                 }
             }
-            
+
             extern(System) static void controlHandler(DWORD fdwControl) nothrow
             {
                 switch(fdwControl)
@@ -318,7 +318,7 @@ template buildDaemon(alias DaemonInfo)
                     foreach(signal; DaemonInfo.signalMap.keys)
                     {
                         alias handler = DaemonInfo.signalMap.get!signal;
-                        
+
                         static if(isComposition!signal)
                         {
                             foreach(subsignal; signal.signals)
@@ -327,13 +327,13 @@ template buildDaemon(alias DaemonInfo)
                                 {
                                     savedLogger.logInfo(text("Caught signal ", subsignal));
                                     bool res = true;
-                                    try 
+                                    try
                                     {
                                         static if(__traits(compiles, handler(savedLogger, subsignal)))
                                             res = handler(savedLogger, subsignal);
                                         else
                                             res = handler(savedLogger);
-                                            
+
                                         if(!res) reportServiceStatus(SERVICE_STOPPED, NO_ERROR, 0.dur!"msecs");
                                     }
                                     catch(Throwable th)
@@ -344,19 +344,19 @@ template buildDaemon(alias DaemonInfo)
                                 }
                             }
                         }
-                        else 
+                        else
                         {
                             case(daemon.mapSignal(signal)):
                             {
                                 savedLogger.logInfo(text("Caught signal ", signal));
                                 bool res = true;
-                                try 
+                                try
                                 {
                                     static if(__traits(compiles, handler(savedLogger, signal)))
                                         res = handler(savedLogger, signal);
                                     else
                                         res = handler(savedLogger);
-                                        
+
                                     if(!res) reportServiceStatus(SERVICE_STOPPED, NO_ERROR, 0.dur!"msecs");
                                 }
                                 catch(Throwable th)
@@ -374,17 +374,17 @@ template buildDaemon(alias DaemonInfo)
                 }
             }
         }
-        
+
         /// Wrapper for getting service manager
         SC_HANDLE getSCManager()
         {
             auto manager = OpenSCManagerW(null, null, SC_MANAGER_ALL_ACCESS);
             if(manager is null)
                 throw new LoggedException(text("Failed to open SC manager!", getLastErrorDescr));
-            
+
             return manager;
         }
-        
+
         /// Wrapper for getting service handle
         SC_HANDLE getService(SC_HANDLE manager, DWORD accessFlags, bool supressLogging = false)
         {
@@ -400,16 +400,16 @@ template buildDaemon(alias DaemonInfo)
             }
             return service;
         }
-        
+
         static if(isDaemon!DaemonInfo)
         {
             enum ServiceInitState
             {
-                ServiceIsOk, // dispatcher has run successfully 
+                ServiceIsOk, // dispatcher has run successfully
                 NotService,  // dispatcher failed with specific error
                 OtherError
             }
-            
+
             /// Performs service initialization
             /**
             *    If inner $(B StartServiceCtrlDispatcherW) fails due reason that
@@ -427,7 +427,7 @@ template buildDaemon(alias DaemonInfo)
                 serviceTable[0].lpServiceProc = &serviceMain;
                 serviceTable[1].lpServiceName = null;
                 serviceTable[1].lpServiceProc = null;
-                
+
                 if(!StartServiceCtrlDispatcherW(serviceTable.ptr))
                 {
                     if(GetLastError == ERROR_FAILED_SERVICE_CONTROLLER_CONNECT)
@@ -441,21 +441,21 @@ template buildDaemon(alias DaemonInfo)
                         return ServiceInitState.OtherError;
                     }
                 }
-                
+
                 return ServiceInitState.ServiceIsOk;
             }
         }
-        
+
         /// Registers service in SCM database
         void serviceInstall()
         {
             wchar[MAX_PATH] path;
             if(!GetModuleFileNameW(null, path.ptr, MAX_PATH))
-                throw new LoggedException("Cannot install service! " ~ getLastErrorDescr); 
-            
+                throw new LoggedException("Cannot install service! " ~ getLastErrorDescr);
+
             auto manager = getSCManager();
             scope(exit) CloseServiceHandle(manager);
-            
+
             auto servname = cast(LPWSTR)DaemonInfo.daemonName.toUTF16z;
             auto service = CreateServiceW(
                 manager,
@@ -472,39 +472,39 @@ template buildDaemon(alias DaemonInfo)
                 null,
                 null);
             scope(exit) CloseServiceHandle(service);
-            
+
             if(service is null)
-                throw new LoggedException("Failed to create service! " ~ getLastErrorDescr); 
-            
+                throw new LoggedException("Failed to create service! " ~ getLastErrorDescr);
+
             savedLogger.logInfo("Service installed successfully!");
         }
-        
+
         /// Removing service from SC manager
         void serviceRemove()
         {
             auto manager = getSCManager();
             scope(exit) CloseServiceHandle(manager);
-            
+
             auto service = getService(manager, SERVICE_STOP | DELETE);
             scope(exit) CloseServiceHandle(service);
-            
+
             DeleteService(service);
             savedLogger.logInfo("Service is removed successfully!");
         }
-        
+
         /// Tries to start service and checks the running state
         void serviceStart()
         {
             auto manager = getSCManager();
             scope(exit) CloseServiceHandle(manager);
-            
+
             auto service = getService(manager, SERVICE_START);
             scope(exit) CloseServiceHandle(service);
-            
+
             if(!StartServiceW(service, 0, null))
                 throw new LoggedException(text("Failed to start service! ", getLastErrorDescr));
-            
-            
+
+
             auto maybeStatus = queryServiceStatus();
             if(maybeStatus.isNull)
             {
@@ -513,18 +513,18 @@ template buildDaemon(alias DaemonInfo)
             else
             {
                 Thread.sleep(500.dur!"msecs");
-                
+
                 auto status = maybeStatus.get;
                 auto stamp = Clock.currSystemTick;
                 while(status.dwCurrentState != SERVICE_RUNNING)
                 {
-                    if(stamp + cast(TickDuration)30.dur!"seconds" < Clock.currSystemTick) 
+                    if(stamp + cast(TickDuration)30.dur!"seconds" < Clock.currSystemTick)
                         throw new LoggedException("Cannot start service! Timeout");
                     if(status.dwWin32ExitCode != 0)
                         throw new LoggedException(text("Failed to start service! Service error code: ", status.dwWin32ExitCode));
                     if(status.dwCurrentState == SERVICE_STOPPED)
                         throw new LoggedException("Failed to start service! The service remains in stop state!");
-                        
+
                     auto maybeStatus2 = queryServiceStatus();
                     if(maybeStatus2.isNull)
                     {
@@ -536,10 +536,10 @@ template buildDaemon(alias DaemonInfo)
                     }
                 }
             }
-            
+
             savedLogger.logInfo("Service is started successfully!");
         }
-        
+
         /**
         *    Checks if the service is exist and returns its status.
         *
@@ -549,7 +549,7 @@ template buildDaemon(alias DaemonInfo)
         {
             auto manager = getSCManager();
             scope(exit) CloseServiceHandle(manager);
-            
+
             SC_HANDLE service;
             try
             {
@@ -560,23 +560,23 @@ template buildDaemon(alias DaemonInfo)
                 return ret;
             }
             scope(exit) CloseServiceHandle(service);
-            
+
             SERVICE_STATUS status;
             if(!QueryServiceStatus(service, &status))
                 throw new LoggedException(text("Failed to query service! ", getLastErrorDescr));
 
             return Nullable!SERVICE_STATUS(status);
         }
-        
+
         /// Sets current service status and reports it to the SCM
         void reportServiceStatus(DWORD currentState, DWORD exitCode, Duration waitHint)
         {
             static DWORD checkPoint = 1;
-            
+
             serviceStatus.dwCurrentState = currentState;
             serviceStatus.dwWin32ExitCode = exitCode;
             serviceStatus.dwWaitHint = cast(DWORD)waitHint.total!"msecs";
-            
+
             if(currentState == SERVICE_START_PENDING)
             {
                 serviceStatus.dwControlsAccepted = 0;
@@ -585,16 +585,16 @@ template buildDaemon(alias DaemonInfo)
             {
                 serviceStatus.dwControlsAccepted = daemon.makeUsingFlag;
             }
-            
+
             SetServiceStatus(serviceStatusHandle, &serviceStatus);
         }
-        
+
         /// Reads last error id and formats it into a man-readable message
         string getLastErrorDescr()
         {
             char* buffer;
             auto error = GetLastError();
-            
+
             FormatMessageA(
                 FORMAT_MESSAGE_FROM_SYSTEM | FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_IGNORE_INSERTS, null, error, MAKELANGID(LANG_ENGLISH, SUBLANG_DEFAULT), cast(LPSTR)&buffer, 0, null);
             scope(exit) LocalFree(cast(void*)buffer);
@@ -616,7 +616,7 @@ private
             else static if(isCustomSignal(T[1])) alias extractCustomSignals = StrictExpressionList!(T[0].expand, T[1]);
             else alias extractCustomSignals = T[0];
         }
-        
+
         template extractNativeSignals(T...)
         {
             static if(T.length < 2) alias extractNativeSignals = T[0];
@@ -624,17 +624,17 @@ private
             else static if(isNativeSignal(T[1])) alias extractNativeSignals = StrictExpressionList!(T[0].expand, T[1]);
             else alias extractNativeSignals = T[0];
         }
-        
+
         static if(isDaemon!DaemonInfo)
         {
             alias customSignals = staticFold!(extractCustomSignals, StrictExpressionList!(), DaemonInfo.signalMap.keys).expand; //pragma(msg, [customSignals]);
             alias nativeSignals = staticFold!(extractNativeSignals, StrictExpressionList!(), DaemonInfo.signalMap.keys).expand; //pragma(msg, [nativeSignals]);
         } else
-        { 
+        {
             alias customSignals = staticFold!(extractCustomSignals, StrictExpressionList!(), DaemonInfo.signals).expand; //pragma(msg, [customSignals]);
             alias nativeSignals = staticFold!(extractNativeSignals, StrictExpressionList!(), DaemonInfo.signals).expand; //pragma(msg, [nativeSignals]);
         }
-        
+
         DWORD mapSignal(Signal sig)
         {
             switch(sig)
@@ -652,25 +652,25 @@ private
                 default: return mapCustomSignal(sig);
             }
         }
-        
+
         DWORD mapCustomSignal(Signal sig)
         {
             assert(!isNativeSignal(sig));
-                
+
             DWORD counter = 0;
             foreach(key; customSignals)
             {
                 if(key == sig) return 128 + counter;
                 counter++;
             }
-            
+
             assert(false, "Signal isn't in custom list! Impossible state!");
         }
-        
+
         DWORD makeUsingFlag()
         {
             DWORD accum = 0;
-                
+
             foreach(signal; nativeSignals)
             {
                 static if(signal == Signal.Stop)            accum |= SERVICE_ACCEPT_STOP;
@@ -684,10 +684,10 @@ private
                 static if(signal == Signal.NetBindRemove)   accum |= SERVICE_ACCEPT_NETBINDCHANGE;
                 static if(signal == Signal.ParamChange)     accum |= SERVICE_ACCEPT_PARAMCHANGE;
             }
-            
+
             return accum;
         }
-        
+
         DWORD getControlAccessFlag(Signal sig)
         {
             switch(sig)
@@ -713,19 +713,19 @@ private
     extern (C) void  rt_moduleTlsDtor();
 }
 // winapi defines
-private extern(System) 
+private extern(System)
 {
-    struct SERVICE_TABLE_ENTRY 
+    struct SERVICE_TABLE_ENTRY
     {
         LPWSTR                  lpServiceName;
         LPSERVICE_MAIN_FUNCTION lpServiceProc;
     }
     alias LPSERVICE_TABLE_ENTRY = SERVICE_TABLE_ENTRY*;
-    
+
     alias extern(System) void function(DWORD dwArgc, LPWSTR* lpszArgv) LPSERVICE_MAIN_FUNCTION;
-    
+
     BOOL StartServiceCtrlDispatcherW(const SERVICE_TABLE_ENTRY* lpServiceTable);
-    
+
     struct SERVICE_STATUS
     {
         DWORD dwServiceType;
@@ -737,17 +737,17 @@ private extern(System)
         DWORD dwWaitHint;
     }
     alias LPSERVICE_STATUS = SERVICE_STATUS*;
-    
+
     alias SERVICE_STATUS_HANDLE = HANDLE;
     alias SC_HANDLE = HANDLE;
-    
+
     // dwServiceType
     enum SERVICE_FILE_SYSTEM_DRIVER = 0x00000002;
     enum SERVICE_KERNEL_DRIVER = 0x00000001;
     enum SERVICE_WIN32_OWN_PROCESS = 0x00000010;
     enum SERVICE_WIN32_SHARE_PROCESS = 0x00000020;
     enum SERVICE_INTERACTIVE_PROCESS = 0x00000100;
-    
+
     // dwCurrentState
     enum SERVICE_CONTINUE_PENDING = 0x00000005;
     enum SERVICE_PAUSE_PENDING = 0x00000006;
@@ -756,7 +756,7 @@ private extern(System)
     enum SERVICE_START_PENDING = 0x00000002;
     enum SERVICE_STOP_PENDING = 0x00000003;
     enum SERVICE_STOPPED = 0x00000001;
-    
+
     // dwControlsAccepted
     enum SERVICE_ACCEPT_NETBINDCHANGE = 0x00000010;
     enum SERVICE_ACCEPT_PARAMCHANGE = 0x00000008;
@@ -764,14 +764,14 @@ private extern(System)
     enum SERVICE_ACCEPT_PRESHUTDOWN = 0x00000100;
     enum SERVICE_ACCEPT_SHUTDOWN = 0x00000004;
     enum SERVICE_ACCEPT_STOP = 0x00000001;
-    
+
     enum NO_ERROR = 0;
-    
+
     alias extern(System) void function(DWORD fdwControl) LPHANDLER_FUNCTION;
     SERVICE_STATUS_HANDLE RegisterServiceCtrlHandlerW(LPWSTR lpServiceName, LPHANDLER_FUNCTION lpHandlerProc);
-    
+
     SC_HANDLE OpenSCManagerW(LPWSTR lpMachineName, LPWSTR lpDatabaseName, DWORD dwDesiredAccess);
-    
+
     // dwDesiredAccess
     enum SC_MANAGER_ALL_ACCESS = 0xF003F;
     enum SC_MANAGER_CREATE_SERVICE = 0x0002;
@@ -780,7 +780,7 @@ private extern(System)
     enum SC_MANAGER_LOCK = 0x0008;
     enum SC_MANAGER_MODIFY_BOOT_CONFIG = 0x0020;
     enum SC_MANAGER_QUERY_LOCK_STATUS = 0x0010;
-    
+
     SC_HANDLE CreateServiceW(
           SC_HANDLE hSCManager,
           LPWSTR lpServiceName,
@@ -796,14 +796,14 @@ private extern(System)
           LPWSTR lpServiceStartName,
           LPWSTR lpPassword
     );
-    
+
     // dwStartType
     enum SERVICE_AUTO_START = 0x00000002;
     enum SERVICE_BOOT_START = 0x00000000;
     enum SERVICE_DEMAND_START = 0x00000003;
     enum SERVICE_DISABLED = 0x00000004;
     enum SERVICE_SYSTEM_START = 0x00000001;
-    
+
     // dwDesiredAccess CreateService
     enum SERVICE_ALL_ACCESS = 0xF01FF;
     enum SERVICE_CHANGE_CONFIG = 0x0002;
@@ -815,47 +815,47 @@ private extern(System)
     enum SERVICE_START = 0x0010;
     enum SERVICE_STOP = 0x0020;
     enum SERVICE_USER_DEFINED_CONTROL = 0x0100;
-    
-    // dwErrorControl 
+
+    // dwErrorControl
     enum SERVICE_ERROR_CRITICAL = 0x00000003;
     enum SERVICE_ERROR_IGNORE = 0x00000000;
     enum SERVICE_ERROR_NORMAL = 0x00000001;
     enum SERVICE_ERROR_SEVERE = 0x00000002;
-    
+
     bool CloseServiceHandle(SC_HANDLE hSCOjbect);
-    
+
     SC_HANDLE OpenServiceW(
         SC_HANDLE hSCManager,
         LPWSTR lpServiceName,
         DWORD dwDesiredAccess
     );
-    
+
     BOOL DeleteService(
         SC_HANDLE hService
     );
-    
+
     BOOL StartServiceW(
         SC_HANDLE hService,
         DWORD dwNumServiceArgs,
         LPWSTR *lpServiceArgVectors
     );
-    
+
     BOOL QueryServiceStatus(
         SC_HANDLE hService,
         LPSERVICE_STATUS lpServiceStatus
     );
-    
+
     BOOL SetServiceStatus(
         SERVICE_STATUS_HANDLE hServiceStatus,
         LPSERVICE_STATUS lpServiceStatus
     );
-    
+
     BOOL ControlService(
         SC_HANDLE hService,
           DWORD dwControl,
           LPSERVICE_STATUS lpServiceStatus
     );
-    
+
     enum SERVICE_CONTROL_CONTINUE = 0x00000003;
     enum SERVICE_CONTROL_INTERROGATE = 0x00000004;
     enum SERVICE_CONTROL_NETBINDADD = 0x00000007;
@@ -866,6 +866,6 @@ private extern(System)
     enum SERVICE_CONTROL_PAUSE = 0x00000002;
     enum SERVICE_CONTROL_SHUTDOWN = 0x00000005;
     enum SERVICE_CONTROL_STOP = 0x00000001;
-    
+
     enum ERROR_FAILED_SERVICE_CONTROLLER_CONNECT = 1063;
 }
