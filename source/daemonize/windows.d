@@ -70,7 +70,7 @@ string defaultLockFile(string daemonName)
 *    Truncated $(B DaemonClient) aren't able to run described daemon, only signal sending
 *    and daemon uninstalling.
 */
-template buildDaemon(alias DaemonInfo)
+template buildDaemon(alias DaemonInfo, DWORD startType =  SERVICE_DEMAND_START)
     if(isDaemon!DaemonInfo || isDaemonClient!DaemonInfo)
 {
     /// Support functions
@@ -145,7 +145,7 @@ template buildDaemon(alias DaemonInfo)
             if(maybeStatus.isNull)
             {
                 savedLogger.logInfo("No service is installed!");
-                serviceInstall();
+                serviceInstall(startType);
                 serviceStart();
                 return EXIT_SUCCESS;
             }
@@ -447,7 +447,7 @@ template buildDaemon(alias DaemonInfo)
         }
 
         /// Registers service in SCM database
-        void serviceInstall()
+        void serviceInstall(DWORD startType)
         {
             wchar[MAX_PATH] path;
             if(!GetModuleFileNameW(null, path.ptr, MAX_PATH))
@@ -463,7 +463,7 @@ template buildDaemon(alias DaemonInfo)
                 servname,
                 SERVICE_ALL_ACCESS,
                 SERVICE_WIN32_OWN_PROCESS,
-                SERVICE_DEMAND_START,
+                startType,
                 SERVICE_ERROR_NORMAL,
                 path.ptr,
                 null,
