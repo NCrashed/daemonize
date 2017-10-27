@@ -14,7 +14,17 @@ module daemonize.linux;
 
 version(linux):
 
-static if( __VERSION__ < 2066 ) private enum nogc;
+static if( __VERSION__ < 2070 )
+{
+    import std.c.stdlib;
+    import std.c.linux.linux;
+}
+else
+{
+    import core.stdc.stdlib;
+    import core.sys.posix.unistd;
+    import core.sys.posix.signal;
+}
 
 import std.conv;
 import std.exception;
@@ -24,10 +34,8 @@ import std.process;
 import std.stdio;
 import std.string;
 
-import std.c.linux.linux;
-import std.c.stdlib;
 import core.sys.linux.errno;
-    
+
 import daemonize.daemon;
 import daemonize.string;
 import daemonize.keymap;

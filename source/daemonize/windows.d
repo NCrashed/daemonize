@@ -12,13 +12,17 @@ version(Windows):
 
 static if( __VERSION__ < 2066 ) private enum nogc;
 
+static if( __VERSION__ < 2070 ) import std.c.stdlib;
+else import core.stdc.stdlib;
+
+static if( __VERSION__ < 2075 ) import std.datetime;
+else import core.time;
+
 import core.sys.windows.windows;
 import core.thread;
-import std.datetime;
 import std.string;
 import std.typetuple;
 import std.utf;
-import std.c.stdlib;
 import std.typecons;
 
 import daemonize.daemon;
@@ -515,10 +519,19 @@ template buildDaemon(alias DaemonInfo, DWORD startType =  SERVICE_DEMAND_START)
                 Thread.sleep(500.dur!"msecs");
 
                 auto status = maybeStatus.get;
-                auto stamp = Clock.currSystemTick;
+
+                static if( __VERSION__ < 2075 )
+                {
+                    alias Duration = TickDuration;
+                    alias currTime = Clock.currSystemTick;
+                }
+                else alias currTime = MonoTime.currTime;
+
+                auto stamp = currTime;
+
                 while(status.dwCurrentState != SERVICE_RUNNING)
                 {
-                    if(stamp + cast(TickDuration)30.dur!"seconds" < Clock.currSystemTick)
+                    if(stamp + cast(Duration)30.dur!"seconds" < currTime)
                         throw new LoggedException("Cannot start service! Timeout");
                     if(status.dwWin32ExitCode != 0)
                         throw new LoggedException(text("Failed to start service! Service error code: ", status.dwWin32ExitCode));
