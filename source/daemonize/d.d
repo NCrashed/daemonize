@@ -8,7 +8,7 @@ module daemonize.d;
 
 public
 {
-    import dlogg.log;
+    import daemonize.log;
     import daemonize.daemon;
     import daemonize.keymap;
 }

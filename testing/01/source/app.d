@@ -8,14 +8,13 @@ module test01;
 
 import std.file;
 
-import dlogg.strict;
 import daemonize.d;
 
 alias daemon = Daemon!(
     "Test1",
-    
+
     KeyValueList!(),
-    
+
     (logger, shouldExit) {
         write("output.txt", "Hello World!");
         return 0;
@@ -24,5 +23,5 @@ alias daemon = Daemon!(
 
 int main()
 {
-    return buildDaemon!daemon.run(new shared StrictLogger("logfile.log")); 
+    return buildDaemon!daemon.run(new shared DloggLogger("logfile.log"));
 }

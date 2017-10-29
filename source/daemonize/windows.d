@@ -19,12 +19,13 @@ import std.string;
 import std.typetuple;
 import std.utf;
 import std.c.stdlib;
+import std.conv : text;
 import std.typecons;
 
 import daemonize.daemon;
 import daemonize.string;
 import daemonize.keymap;
-import dlogg.log;
+import daemonize.log;
 
 /// Windows version doesn't use pid files
 string defaultPidFile(string daemonName)
@@ -132,10 +133,10 @@ template buildDaemon(alias DaemonInfo, DWORD startType =  SERVICE_DEMAND_START)
         *   );
         *
         *   //...
-        *   buildDaemon!daemon.run(new shared StrictLogger(logFilePath));
+        *   buildDaemon!daemon.run(new shared DloggLogger(logFilePath));
         *    ----------
         */
-        int run(shared ILogger logger
+        int run(shared IDaemonLogger logger
             , string pidFilePath = "", string lockFilePath = ""
             , int userId = -1, int groupId = -1)
         {
@@ -176,7 +177,7 @@ template buildDaemon(alias DaemonInfo, DWORD startType =  SERVICE_DEMAND_START)
     *
     *   Note: Can be used with $(B DaemonClient) template, actually you can ommit signal list for the template.
     */
-    void uninstall(shared ILogger logger)
+    void uninstall(shared IDaemonLogger logger)
     {
         savedLogger = logger;
 
@@ -200,7 +201,7 @@ template buildDaemon(alias DaemonInfo, DWORD startType =  SERVICE_DEMAND_START)
     *
     *   Note: Can be used with $(B DaemonClient) template.
     */
-    void sendSignal(shared ILogger logger, Signal sig, string pidFilePath = "")
+    void sendSignal(shared IDaemonLogger logger, Signal sig, string pidFilePath = "")
     {
         savedLogger = logger;
 
@@ -217,7 +218,7 @@ template buildDaemon(alias DaemonInfo, DWORD startType =  SERVICE_DEMAND_START)
     }
 
     /// ditto with dynamic service name
-    void sendSignalDynamic(shared ILogger logger, string serviceName, Signal sig, string pidFilePath = "")
+    void sendSignalDynamic(shared IDaemonLogger logger, string serviceName, Signal sig, string pidFilePath = "")
     {
         savedLogger = logger;
 
@@ -256,7 +257,7 @@ template buildDaemon(alias DaemonInfo, DWORD startType =  SERVICE_DEMAND_START)
     {
         __gshared SERVICE_STATUS serviceStatus;
         __gshared SERVICE_STATUS_HANDLE serviceStatusHandle;
-        shared ILogger savedLogger;
+        shared IDaemonLogger savedLogger;
 
         bool shouldExit()
         {
@@ -281,7 +282,7 @@ template buildDaemon(alias DaemonInfo, DWORD startType =  SERVICE_DEMAND_START)
                     serviceStatus.dwServiceType = SERVICE_WIN32_OWN_PROCESS;
 
                     savedLogger.reload;
-                    savedLogger.minOutputLevel = LoggingLevel.Muted;
+                    savedLogger.minOutputLevel = DaemonLogLevel.Muted;
                     savedLogger.logInfo("Registering control handler");
 
                     serviceStatusHandle = RegisterServiceCtrlHandlerW(cast(LPWSTR)DaemonInfo.daemonName.toUTF16z, &controlHandler);

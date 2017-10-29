@@ -27,26 +27,26 @@ import std.string;
 import std.c.linux.linux;
 import std.c.stdlib;
 import core.sys.linux.errno;
-    
+
 import daemonize.daemon;
 import daemonize.string;
 import daemonize.keymap;
-import dlogg.log;
+import daemonize.log;
 
 /// Returns local pid file that is used when no custom one is specified
 string defaultPidFile(string daemonName)
 {
-    return expandTilde(buildPath("~", ".daemonize", daemonName ~ ".pid"));  
+    return expandTilde(buildPath("~", ".daemonize", daemonName ~ ".pid"));
 }
 
 /// Returns local lock file that is used when no custom one is specified
 string defaultLockFile(string daemonName)
 {
-    return expandTilde(buildPath("~", ".daemonize", daemonName ~ ".lock"));  
+    return expandTilde(buildPath("~", ".daemonize", daemonName ~ ".lock"));
 }
 
 /// Checks is $(B sig) is actually built-in
-@nogc @safe bool isNativeSignal(Signal sig) pure nothrow 
+@nogc @safe bool isNativeSignal(Signal sig) pure nothrow
 {
     switch(sig)
     {
@@ -60,7 +60,7 @@ string defaultLockFile(string daemonName)
 }
 
 /// Checks is $(B sig) is not actually built-in
-@nogc @safe bool isCustomSignal(Signal sig) pure nothrow 
+@nogc @safe bool isCustomSignal(Signal sig) pure nothrow
 {
     return !isNativeSignal(sig);
 }
@@ -73,10 +73,10 @@ string defaultLockFile(string daemonName)
 *   Daemon is detached from terminal, therefore it needs a preinitialized $(B logger).
 *
 *   As soon as daemon is ready the function executes $(B main) delegate that returns
-*   application return code. 
+*   application return code.
 *
 *   Daemon uses pid and lock files. Pid file holds process id for communications with
-*   other applications. If $(B pidFilePath) isn't set, the default path to pid file is 
+*   other applications. If $(B pidFilePath) isn't set, the default path to pid file is
 *   '~/.daemonize/<daemonName>.pid'. Lock file prevents from execution of numerous copies
 *   of daemons. If $(B lockFilePath) isn't set, the default path to lock file is
 *   '~/.daemonize/<daemonName>.lock'. If you want several instances of one daemon, redefine
@@ -88,10 +88,10 @@ string defaultLockFile(string daemonName)
 *
 *   Example:
 *   ---------
-*  
+*
 *   alias daemon = Daemon!(
 *       "DaemonizeExample1", // unique name
-*       
+*
 *       // Setting associative map signal -> callbacks
 *       KeyValueList!(
 *           Composition!(Signal.Terminate, Signal.Quit, Signal.Shutdown, Signal.Stop), (logger, signal)
@@ -105,109 +105,109 @@ string defaultLockFile(string daemonName)
 *               return true; // continue execution
 *           }
 *       ),
-*       
+*
 *       // Main function where your code is
 *       (logger, shouldExit) {
 *           // will stop the daemon in 5 minutes
 *           auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
 *           bool timeout = false;
 *           while(!shouldExit() && time > Clock.currSystemTick) {  }
-*           
+*
 *           logger.logInfo("Exiting main function!");
-*           
+*
 *           return 0;
 *       }
 *   );
 *
-*   return buildDaemon!daemon.run(logger); 
+*   return buildDaemon!daemon.run(logger);
 *   ---------
 */
 template buildDaemon(alias DaemonInfo)
     if(isDaemon!DaemonInfo || isDaemonClient!DaemonInfo)
 {
     alias daemon = readDaemonInfo!DaemonInfo;
- 
+
     static if(isDaemon!DaemonInfo)
     {
-        int run(shared ILogger logger
+        int run(shared IDaemonLogger logger
             , string pidFilePath = "", string lockFilePath = ""
             , int userId = -1, int groupId = -1)
-        {        
+        {
             // Local locak file
             if(lockFilePath == "")
             {
-                lockFilePath = defaultLockFile(DaemonInfo.daemonName);  
+                lockFilePath = defaultLockFile(DaemonInfo.daemonName);
             }
-            
+
             // Local pid file
             if(pidFilePath == "")
             {
                 pidFilePath = defaultPidFile(DaemonInfo.daemonName);
             }
-            
+
             savedLogger = logger;
             savedPidFilePath = pidFilePath;
             savedLockFilePath = lockFilePath;
-            
+
             // Handling lockfile if any
             enforceLockFile(lockFilePath, userId);
             scope(exit) deleteLockFile(lockFilePath);
-            
+
             // Saving process ID and session ID
             pid_t pid, sid;
-            
+
             // For off the parent process
             pid = fork();
             if(pid < 0)
             {
                 savedLogger.logError("Failed to start daemon: fork failed");
-                
+
                 // Deleting fresh lockfile
                 deleteLockFile(lockFilePath);
-                    
+
                 terminate(EXIT_FAILURE);
             }
-            
+
             // If we got good PID, then we can exit the parent process
             if(pid > 0)
             {
                 // handling pidfile if any
                 writePidFile(pidFilePath, pid, userId);
-    
+
                 savedLogger.logInfo(text("Daemon is detached with pid ", pid));
                 terminate(EXIT_SUCCESS, false);
             }
-            
+
             // dropping root privileges
             dropRootPrivileges(groupId, userId);
-            
+
             // Change the file mode mask and suppress printing to console
             umask(0);
-            savedLogger.minOutputLevel(LoggingLevel.Muted);
-            
+            savedLogger.minOutputLevel(DaemonLogLevel.Muted);
+
             // Handling of deleting pid file
             scope(exit) deletePidFile(pidFilePath);
-            
+
             // Create a new SID for the child process
             sid = setsid();
             if (sid < 0)
             {
                 deleteLockFile(lockFilePath);
                 deletePidFile(pidFilePath);
-                    
+
                 terminate(EXIT_FAILURE);
             }
-    
+
             // Close out the standard file descriptors
             close(0);
             close(1);
             close(2);
-    
+
             void bindSignal(int sig, sighandler_t handler)
             {
                 enforce(signal(sig, handler) != SIG_ERR, text("Cannot catch signal ", sig));
             }
-            
+
             // Bind native signals
             // other signals cause application to hang or cause no signal detection
             // sigusr1 sigusr2 are used by garbage collector
@@ -217,31 +217,31 @@ template buildDaemon(alias DaemonInfo)
             bindSignal(SIGINT,  &signal_handler_daemon);
             bindSignal(SIGQUIT, &signal_handler_daemon);
             bindSignal(SIGHUP, &signal_handler_daemon);
-            
+
             assert(daemon.canFitRealtimeSignals, "Cannot fit all custom signals to real-time signals range!");
             foreach(signame; daemon.customSignals)
             {
                 bindSignal(daemon.mapRealTimeSignal(signame), &signal_handler_daemon);
             }
-    
+
             int code = EXIT_FAILURE;
             try code = DaemonInfo.mainFunc(savedLogger, &shouldExitFunc );
-            catch (Throwable th) 
+            catch (Throwable th)
             {
                 savedLogger.logError(text("Catched unhandled throwable at daemon level at ", th.file, ": ", th.line, " : ", th.msg));
                 savedLogger.logError("Terminating...");
-            } 
-            finally 
+            }
+            finally
             {
                 deleteLockFile(lockFilePath);
                 deletePidFile(pidFilePath);
             }
-            
+
             terminate(code);
             return 0;
         }
     }
-    
+
     /**
     *   As custom signals are mapped to realtime signals at runtime, it is complicated
     *   to calculate signal number by hands. The function simplifies sending signals
@@ -253,29 +253,29 @@ template buildDaemon(alias DaemonInfo)
     *   $(B daemonName) is passed as runtime parameter to be able read service name at runtime.
     *   $(B signal) is the signal that you want to send. $(B pidFilePath) is optional parameter
     *   that overrides default algorithm of finding pid files (calculated from $(B daemonName) in form
-    *   of '~/.daemonize/<daemonName>.pid').   
+    *   of '~/.daemonize/<daemonName>.pid').
     *
-    *   See_Also: $(B sendSignal) version of the function that takes daemon name from $(B DaemonInfo). 
+    *   See_Also: $(B sendSignal) version of the function that takes daemon name from $(B DaemonInfo).
     */
-    void sendSignalDynamic(shared ILogger logger, string daemonName, Signal signal, string pidFilePath = "")
+    void sendSignalDynamic(shared IDaemonLogger logger, string daemonName, Signal signal, string pidFilePath = "")
     {
         savedLogger = logger;
-        
+
         // Try to find at default place
         if(pidFilePath == "")
         {
             pidFilePath = defaultPidFile(daemonName);
         }
-        
+
         // Reading file
         int pid = readPidFile(pidFilePath);
 
         logger.logInfo(text("Sending signal ", signal, " to daemon ", daemonName, " (pid ", pid, ")"));
         kill(pid, daemon.mapSignal(signal));
     }
-    
+
     /// ditto
-    void sendSignal(shared ILogger logger, Signal signal, string pidFilePath = "")
+    void sendSignal(shared IDaemonLogger logger, Signal signal, string pidFilePath = "")
     {
         sendSignalDynamic(logger, DaemonInfo.daemonName, signal, pidFilePath);
     }
@@ -284,7 +284,7 @@ template buildDaemon(alias DaemonInfo)
     *   In GNU/Linux daemon doesn't require deinstallation.
     */
     void uninstall() {}
-    
+
     /**
     *   Saves info about exception into daemon $(B logger)
     */
@@ -295,34 +295,34 @@ template buildDaemon(alias DaemonInfo)
             savedLogger.logError(msg);
             super(msg, file, line, next);
         }
-    
+
         @safe nothrow this(string msg, Throwable next, string file = __FILE__, size_t line = __LINE__)
         {
             savedLogger.logError(msg);
             super(msg, file, line, next);
         }
     }
-    
+
     private
-    {   
-        shared ILogger savedLogger;
+    {
+        shared IDaemonLogger savedLogger;
         string savedPidFilePath;
         string savedLockFilePath;
-        
+
         __gshared bool shouldExit;
-        
+
         bool shouldExitFunc()
         {
             return shouldExit;
-        } 
-        
+        }
+
         /// Actual signal handler
         static if(isDaemon!DaemonInfo) extern(C) void signal_handler_daemon(int sig) nothrow
         {
             foreach(signal; DaemonInfo.signalMap.keys)
             {
                 alias handler = DaemonInfo.signalMap.get!signal;
-                
+
                 static if(isComposition!signal)
                 {
                     foreach(subsignal; signal.signals)
@@ -335,18 +335,18 @@ template buildDaemon(alias DaemonInfo)
                                     bool res = handler(savedLogger, subsignal);
                                 else
                                     bool res = handler(savedLogger);
-                                    
+
                                 if(!res)
                                 {
                                     deleteLockFile(savedLockFilePath);
                                     deletePidFile(savedPidFilePath);
-                                    
+
                                     shouldExit = true;
                                     //terminate(EXIT_SUCCESS);
-                                } 
+                                }
                                 else return;
-                                
-                            } catch(Throwable th) 
+
+                            } catch(Throwable th)
                             {
                                 savedLogger.logError(text("Caught at signal ", subsignal," handler: ", th));
                             }
@@ -362,18 +362,18 @@ template buildDaemon(alias DaemonInfo)
                                 bool res = handler(savedLogger, signal);
                             else
                                 bool res = handler(savedLogger);
-                                
+
                             if(!res)
                             {
                                 deleteLockFile(savedLockFilePath);
                                 deletePidFile(savedPidFilePath);
-                                
+
                                 shouldExit = true;
                                 //terminate(EXIT_SUCCESS);
-                            } 
+                            }
                             else return;
-                        } 
-                        catch(Throwable th) 
+                        }
+                        catch(Throwable th)
                         {
                             savedLogger.logError(text("Caught at signal ", signal," handler: ", th));
                         }
@@ -381,7 +381,7 @@ template buildDaemon(alias DaemonInfo)
                 }
              }
         }
-        
+
         /**
         *   Checks existence of special lock file at $(B path) and prevents from
         *   continuing if there is it. Also changes permissions for the file if
@@ -403,16 +403,16 @@ template buildDaemon(alias DaemonInfo)
                 auto file = File(path, "w");
                 file.close();
             }
-            
+
             // if root, change permission on file to be able to remove later
-            if (getuid() == 0 && userid >= 0) 
+            if (getuid() == 0 && userid >= 0)
             {
-                savedLogger.logDebug("Changing permissions for lock file: ", path);
+                savedLogger.logDebug("Changing permissions for lock file: " ~ path);
                 executeShell(text("chown ", userid," ", path.dirName));
                 executeShell(text("chown ", userid," ", path));
             }
         }
-        
+
         /**
         *   Removing lock file while terminating.
         */
@@ -431,7 +431,7 @@ template buildDaemon(alias DaemonInfo)
                 }
             }
         }
-        
+
         /**
         *   Writing down file with process id $(B pid) to $(B path) and changes
         *   permissions to $(B userid) (if not -1 and there is root dropping).
@@ -446,13 +446,13 @@ template buildDaemon(alias DaemonInfo)
                 }
                 auto file = File(path, "w");
                 scope(exit) file.close();
-                
+
                 file.write(pid);
-                
+
                 // if root, change permission on file to be able to remove later
-                if (getuid() == 0 && userid >= 0) 
+                if (getuid() == 0 && userid >= 0)
                 {
-                    savedLogger.logDebug("Changing permissions for pid file: ", path);
+                    savedLogger.logDebug("Changing permissions for pid file: " ~ path);
                     executeShell(text("chown ", userid," ", path.dirName));
                     executeShell(text("chown ", userid," ", path));
                 }
@@ -462,7 +462,7 @@ template buildDaemon(alias DaemonInfo)
                 return;
             }
         }
-        
+
         /// Removing process id file
         void deletePidFile(string path)
         {
@@ -475,13 +475,13 @@ template buildDaemon(alias DaemonInfo)
                 return;
             }
         }
-        
+
         /**
         *   Dropping root privileges to $(B groupid) and $(B userid).
         */
         void dropRootPrivileges(int groupid, int userid)
         {
-            if (getuid() == 0) 
+            if (getuid() == 0)
             {
                 if(groupid < 0 || userid < 0)
                 {
@@ -489,9 +489,9 @@ template buildDaemon(alias DaemonInfo)
                         " privileges lowing!");
                     return;
                 }
-                
+
                 savedLogger.logInfo("Running as root, dropping privileges...");
-                // process is running as root, drop privileges 
+                // process is running as root, drop privileges
                 if (setgid(groupid) != 0)
                 {
                     savedLogger.logError(text("setgid: Unable to drop group privileges: ", strerror(errno).fromStringz));
@@ -504,7 +504,7 @@ template buildDaemon(alias DaemonInfo)
                 }
             }
         }
-        
+
         /// Terminating application with cleanup
         void terminate(int code, bool isDaemon = true) nothrow
         {
@@ -512,7 +512,7 @@ template buildDaemon(alias DaemonInfo)
             {
                 savedLogger.logInfo("Daemon is terminating with code: " ~ to!string(code));
                 savedLogger.finalize();
-            
+
                 gc_term();
                 try {
                     _d_critical_term();
@@ -520,17 +520,17 @@ template buildDaemon(alias DaemonInfo)
                 } catch (Exception ex) {
                 }
             }
-            
+
             exit(code);
         }
-        
+
         /// Tries to read a number from $(B filename)
         int readPidFile(string filename)
         {
             std.stdio.writeln(filename);
             if(!filename.exists)
                 throw new LoggedException("Cannot find pid file at '" ~ filename ~ "'!");
-            
+
             auto file = File(filename, "r");
             return file.readln.to!int;
         }
@@ -553,9 +553,9 @@ private
         void _d_monitor_staticdtor();
 
         void gc_term();
-        
+
         alias int pid_t;
-        
+
         // daemon functions
         pid_t fork();
         int umask(int);
@@ -567,7 +567,7 @@ private
         sighandler_t signal(int signum, sighandler_t handler);
         char* strerror(int errnum) pure;
     }
-    
+
     /// Handles utilities for signal mapping from local representation to GNU/Linux one
     template readDaemonInfo(alias DaemonInfo)
         if(isDaemon!DaemonInfo || isDaemonClient!DaemonInfo)
@@ -579,7 +579,7 @@ private
             else static if(isCustomSignal(T[1])) alias extractCustomSignals = StrictExpressionList!(T[0].expand, T[1]);
             else alias extractCustomSignals = T[0];
         }
-        
+
         template extractNativeSignals(T...)
         {
             static if(T.length < 2) alias extractNativeSignals = T[0];
@@ -587,28 +587,28 @@ private
             else static if(isNativeSignal(T[1])) alias extractNativeSignals = StrictExpressionList!(T[0].expand, T[1]);
             else alias extractNativeSignals = T[0];
         }
-        
+
         static if(isDaemon!DaemonInfo)
         {
             alias customSignals = staticFold!(extractCustomSignals, StrictExpressionList!(), DaemonInfo.signalMap.keys).expand; //pragma(msg, [customSignals]);
             alias nativeSignals = staticFold!(extractNativeSignals, StrictExpressionList!(), DaemonInfo.signalMap.keys).expand; //pragma(msg, [nativeSignals]);
         } else
-        { 
+        {
             alias customSignals = staticFold!(extractCustomSignals, StrictExpressionList!(), DaemonInfo.signals).expand; //pragma(msg, [customSignals]);
             alias nativeSignals = staticFold!(extractNativeSignals, StrictExpressionList!(), DaemonInfo.signals).expand; //pragma(msg, [nativeSignals]);
         }
-        
-        /** 
-        *   Checks if all not native signals can be binded 
+
+        /**
+        *   Checks if all not native signals can be binded
         *   to real-time signals.
         */
         bool canFitRealtimeSignals()
         {
             return customSignals.length <= __libc_current_sigrtmax - __libc_current_sigrtmin;
         }
-        
+
         /// Converts platform independent signal to native
-        @safe int mapSignal(Signal sig) nothrow 
+        @safe int mapSignal(Signal sig) nothrow
         {
             switch(sig)
             {
@@ -617,22 +617,22 @@ private
                 case(Signal.Interrupt): return SIGINT;
                 case(Signal.Quit):      return SIGQUIT;
                 case(Signal.Terminate): return SIGTERM;
-                default: return mapRealTimeSignal(sig);                    
+                default: return mapRealTimeSignal(sig);
             }
         }
-        
+
         /// Converting custom signal to real-time signal
-        @trusted int mapRealTimeSignal(Signal sig) nothrow 
+        @trusted int mapRealTimeSignal(Signal sig) nothrow
         {
             assert(!isNativeSignal(sig));
-            
+
             int counter = 0;
             foreach(key; customSignals)
-            {                
+            {
                 if(sig == key) return counter + __libc_current_sigrtmin;
                 else counter++;
             }
-            
+
             assert(false, "Parameter signal not in daemon description!");
         }
     }

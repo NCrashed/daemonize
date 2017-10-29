@@ -8,13 +8,13 @@
         {
             "name": "default",
             "dependencies" : {
-                "dlogg": ">=0.3.3" 
+                "dlogg": { "version": "~>0.4.1" , "optional": true }
             }
         },
         {
             "name": "colorized",
             "dependencies" : {
-                "dlogg": ">=0.3.3"
+                "dlogg": { "version": "~>0.4.1" , "optional": true }
             },
             "subConfigurations" : {
                 "dlogg": "colorized"

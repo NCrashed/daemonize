@@ -5,7 +5,8 @@
 	"license": "MIT",
 	"authors": ["Anton Gushcha (NCrashed) <ncrashed@gmail.com>"],
 	"dependencies" : {
-		"daemonize": {"version": "~master", "path": "../.."}  
+		"daemonize": {"version": "~master", "path": "../.."},
+		"dlogg": "~>0.4.1"
 	},
 	"subConfigurations": {
 		"daemonize": "colorized"
@@ -22,6 +23,6 @@
 			"targetType": "executable",
 			"targetName": "ex2-client",
 			"versions": ["DaemonClient"]
-		}	
+		}
 	]
 }

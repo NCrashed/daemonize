@@ -7,6 +7,7 @@
 	"versions": ["VibeCustomMain"],
 	"dependencies" : {
 		"daemonize": {"version": "~master", "path": "../.."},
+		"dlogg": "~>0.4.1",
 		"vibe-d": "~master"
 	},
 	"subConfigurations": {

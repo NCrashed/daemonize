@@ -1,27 +1,48 @@
-﻿// This file is written in D programming language
-/**
-*   The example demonstrates basic daemonize features. Described
-*   daemon responds to SIGTERM and SIGHUP signals.
-*   
-*   If SIGTERM is received, daemon terminates. If SIGHUP is received,
-*   daemon prints "Hello World!" message to logg.
-*
-*   Daemon will auto-terminate after 5 minutes of running.
-*
-*   Copyright: © 2014 Anton Gushcha
-*   License: Subject to the terms of the MIT license, as written in the included LICENSE file.
-*   Authors: NCrashed <ncrashed@gmail.com>
-*/
-module example01;
+Example 04 Custom Logger
+========================
 
-import std.datetime;
+This small example shows how to pass your custom logging library to daemonize.
 
-import daemonize.d;
+Explanation
+===========
 
-// First you need to describe your daemon via template
+Create a synchronized class that implements the IDaemonLogger interface and wraps your logging library.
+
+```
+synchronized class MyLogger : IDaemonLogger
+{
+    private string file;
+
+    this(string filePath) @trusted
+    {
+        file = filePath;
+    }
+
+    void logDebug(string message) nothrow
+    {
+        debug {
+            import std.stdio : toFile;
+            try message.toFile(file);
+            catch (Exception) {}
+        }
+    }
+
+    void logInfo(lazy string message) nothrow
+    {
+        import std.stdio : toFile;
+        try message.toFile(file);
+        catch (Exception) {}
+    }
+    /* ... */
+}
+```
+
+Create your daemon template, then in your `main` function pass your logging class to daemonize:
+
+```
 alias daemon = Daemon!(
-    "DaemonizeExample1", // unique name
-    
+    "DaemonizeExample4", // unique name
+
     // Setting associative map signal -> callbacks
     KeyValueList!(
         // You can bind same delegate for several signals by Composition template
@@ -37,15 +58,15 @@ alias daemon = Daemon!(
             return true; // continue execution
         }
     ),
-    
+
     // Main function where your code is
     (logger, shouldExit) {
         // will stop the daemon in 5 minutes
         auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
         while(!shouldExit() && time > Clock.currSystemTick) {  }
-        
+
         logger.logInfo("Exiting main function!");
-        
+
         return 0;
     }
 );
@@ -56,5 +77,7 @@ int main()
     version(Windows) string logFilePath = "C:\\logfile.log";
     else string logFilePath = "logfile.log";
 
-    return buildDaemon!daemon.run(new shared DloggLogger(logFilePath));
+    return buildDaemon!daemon.run(new shared MyLogger(logFilePath));
 }
+```
+

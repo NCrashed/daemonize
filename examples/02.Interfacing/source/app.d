@@ -11,7 +11,6 @@ module example02;
 
 import std.datetime;
 
-import dlogg.strict;
 import daemonize.d;
 
 // Describing custom signals
@@ -64,9 +63,9 @@ version(DaemonServer)
         // For windows is important to use absolute path for logging
         version(Windows) string logFilePath = "C:\\logfile.log";
         else string logFilePath = "logfile.log";
-		
-        auto logger = new shared StrictLogger(logFilePath);
-        return buildDaemon!daemon.run(logger); 
+
+        auto logger = new shared DloggLogger(logFilePath);
+        return buildDaemon!daemon.run(logger);
     }
 }
 version(DaemonClient)
@@ -87,8 +86,8 @@ version(DaemonClient)
     
     void main()
     {
-    	auto logger = new shared StrictLogger("client.log");
-    	
+    	auto logger = new shared DloggLogger("client.log");
+
     	alias daemon = buildDaemon!client;
     	alias send = daemon.sendSignal;
     	alias uninstall = daemon.uninstall;

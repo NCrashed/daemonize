@@ -5,7 +5,8 @@
 	"license": "MIT",
 	"authors": ["Anton Gushcha (NCrashed) <ncrashed@gmail.com>"],
 	"dependencies" : {
-		"daemonize": {"version": "~master", "path": "../.."}  
+		"daemonize": {"version": "~master", "path": "../.."},
+		"dlogg": "~>0.4.1"
 	},
 	"configurations": [
 		{
@@ -43,6 +44,6 @@
 			"targetType": "executable",
 			"targetName": "test2-client",
 			"versions": ["Test5"]
-		}		
+		}
 	]
 }
