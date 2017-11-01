@@ -9,7 +9,8 @@
 */
 module example02;
 
-import std.datetime;
+static if( __VERSION__ < 2075) import std.datetime;
+else import core.time;
 
 import dlogg.strict;
 import daemonize.d;
@@ -47,12 +48,21 @@ version(DaemonServer)
                 return true;
             }
         ),
-        
-        (logger, shouldExit) 
+
+        (logger, shouldExit)
         {
             // will stop the daemon in 5 minutes
-            auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
-            while(!shouldExit() && time > Clock.currSystemTick) {  }
+            static if( __VERSION__ < 2075 )
+            {
+                auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
+                alias currTime = Clock.currSystemTick;
+            }
+            else
+            {
+                auto time = MonoTime.currTime + 5.dur!"minutes";
+                alias currTime = MonoTime.currTime;
+            }
+            while(!shouldExit() && time > currTime) {  }
             logger.logInfo("Exiting main function!");
             
             return 0;
