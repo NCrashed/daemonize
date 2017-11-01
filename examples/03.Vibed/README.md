@@ -7,14 +7,13 @@ to `localhost:8080` and responds with simple hello-world page.
 Explanation
 ===========
 
-The vibe and dlogg package use same names for logging utilities, thats why we need some qualified imports:
 ```D
 import dlogg.strict;
 import daemonize.d;
 
-// cannot use vibe.d due symbol clash for logging
 import vibe.core.core;
-import vibe.core.log : setLogLevel, setLogFile, VibeLogLevel = LogLevel;
+import vibe.core.log;
+import vibe.core.log : VibeLogLevel = LogLevel;
 import vibe.http.server;
 ```
 
@@ -84,8 +83,8 @@ int main()
 
     version(Windows) enum logFileName = "C:\\logfile.log";
     else enum logFileName = "logfile.log";
-    
-    auto logger = new shared StrictLogger(logFileName);
-    return buildDaemon!daemon.run(logger); 
+
+    auto logger = new shared DloggLogger(logFileName);
+    return buildDaemon!daemon.run(logger);
 }
 ```

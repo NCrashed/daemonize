@@ -124,7 +124,7 @@ template isComposition(alias T)
 *   $(B pSignalMap) is a $(B KeyValueList) template where
 *   keys are $(B Signal) values and values are delegates of type:
 *   ----------
-*   bool delegate(shared ILogger)
+*   bool delegate(shared IDaemonLogger)
 *   ----------
 *   If the delegate returns $(B false), daemon terminates.
 *

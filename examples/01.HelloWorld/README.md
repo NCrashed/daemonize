@@ -6,11 +6,9 @@ The example demonstrates simple daemon that prints `"Hello World!"` to log when 
 Explanation
 ===========
 
-The first thing you should do is to import `daemonize.d` package that exporting all inner modules
-taking in account current OS. Also daemonize package depends on `dlogg` package for easy handling
-of concurrent and lazy logging:
+The first thing you should do is to import `daemonize.d` package that exports all inner modules
+taking in account current OS:
 ```D
-import dlogg.strict;
 import daemonize.d;
 ```
 
@@ -59,13 +57,13 @@ Main function of the daemon goes further:
         auto time = Clock.currSystemTick + cast(TickDuration)5.dur!"minutes";
         bool timeout = false;
         while(!shouldExit() && time > Clock.currSystemTick) {  }
-        
+
         logger.logInfo("Exiting main function!");
-        
+
         return 0;
     }
 ```
-`shouldExit` should be `int function(shared ILogger, bool function())` type and is used to stop main function from
+`shouldExit` should be `int function(shared IDaemonLogger, bool function())` type and is used to stop main function from
 signal callbacks. As soon as main delegate returns, the daemon terminates. At the example the daemon will auto-stop after 5 minutes.
 
 
@@ -76,8 +74,8 @@ int main()
     // For windows is important to use absolute path for logging
     version(Windows) string logFilePath = "C:\\logfile.log";
     else string logFilePath = "logfile.log";
-    
-    auto logger = new shared StrictLogger(logFilePath);
+
+    auto logger = new shared DloggLogger(logFilePath);
 ```
 
 And then:

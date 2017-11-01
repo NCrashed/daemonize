@@ -1,12 +1,11 @@
 {
-	"name" : "daemonize-example-01-helloworld",
+	"name" : "daemonize-example-04-customlogger",
 	"copyright": "© 2014 Anton Gushcha",
-	"description" : "Demostrates simple usage of the library",
+	"description" : "Demostrates using a custom logger",
 	"license": "MIT",
 	"authors": ["Anton Gushcha (NCrashed) <ncrashed@gmail.com>"],
 	"dependencies" : {
-		"daemonize": {"version": "~master", "path": "../.."},
-		"dlogg": "~>0.4.1"
+		"daemonize": {"version": "~master", "path": "../.."}
 	},
 	"subConfigurations": {
 		"daemonize": "colorized"

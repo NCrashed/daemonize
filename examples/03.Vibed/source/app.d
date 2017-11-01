@@ -12,12 +12,11 @@
 */
 module example03;
 
-import dlogg.strict;
 import daemonize.d;
 
-// cannot use vibe.d due symbol clash for logging
 import vibe.core.core;
-import vibe.core.log : setLogLevel, setLogFile, VibeLogLevel = LogLevel;
+import vibe.core.log;
+import vibe.core.log : VibeLogLevel = LogLevel;
 import vibe.http.server;
 
 // Simple daemon description
@@ -77,7 +76,7 @@ int main()
 
     version(Windows) enum logFileName = "C:\\logfile.log";
     else enum logFileName = "logfile.log";
-	
-    auto logger = new shared StrictLogger(logFileName);
-    return buildDaemon!daemon.run(logger); 
+
+    auto logger = new shared DloggLogger(logFileName);
+    return buildDaemon!daemon.run(logger);
 }

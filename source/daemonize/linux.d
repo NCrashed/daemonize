@@ -39,7 +39,7 @@ import core.sys.linux.errno;
 import daemonize.daemon;
 import daemonize.string;
 import daemonize.keymap;
-import dlogg.log;
+import daemonize.log;
 
 /// Returns local pid file that is used when no custom one is specified
 string defaultPidFile(string daemonName)
@@ -137,7 +137,7 @@ template buildDaemon(alias DaemonInfo)
 
     static if(isDaemon!DaemonInfo)
     {
-        int run(shared ILogger logger
+        int run(shared IDaemonLogger logger
             , string pidFilePath = "", string lockFilePath = ""
             , int userId = -1, int groupId = -1)
         {
@@ -191,7 +191,7 @@ template buildDaemon(alias DaemonInfo)
 
             // Change the file mode mask and suppress printing to console
             umask(0);
-            savedLogger.minOutputLevel(LoggingLevel.Muted);
+            savedLogger.minOutputLevel(DaemonLogLevel.Muted);
 
             // Handling of deleting pid file
             scope(exit) deletePidFile(pidFilePath);
@@ -265,7 +265,7 @@ template buildDaemon(alias DaemonInfo)
     *
     *   See_Also: $(B sendSignal) version of the function that takes daemon name from $(B DaemonInfo).
     */
-    void sendSignalDynamic(shared ILogger logger, string daemonName, Signal signal, string pidFilePath = "")
+    void sendSignalDynamic(shared IDaemonLogger logger, string daemonName, Signal signal, string pidFilePath = "")
     {
         savedLogger = logger;
 
@@ -283,7 +283,7 @@ template buildDaemon(alias DaemonInfo)
     }
 
     /// ditto
-    void sendSignal(shared ILogger logger, Signal signal, string pidFilePath = "")
+    void sendSignal(shared IDaemonLogger logger, Signal signal, string pidFilePath = "")
     {
         sendSignalDynamic(logger, DaemonInfo.daemonName, signal, pidFilePath);
     }
@@ -313,7 +313,7 @@ template buildDaemon(alias DaemonInfo)
 
     private
     {
-        shared ILogger savedLogger;
+        shared IDaemonLogger savedLogger;
         string savedPidFilePath;
         string savedLockFilePath;
 
@@ -415,7 +415,7 @@ template buildDaemon(alias DaemonInfo)
             // if root, change permission on file to be able to remove later
             if (getuid() == 0 && userid >= 0)
             {
-                savedLogger.logDebug("Changing permissions for lock file: ", path);
+                savedLogger.logDebug("Changing permissions for lock file: " ~ path);
                 executeShell(text("chown ", userid," ", path.dirName));
                 executeShell(text("chown ", userid," ", path));
             }
@@ -460,7 +460,7 @@ template buildDaemon(alias DaemonInfo)
                 // if root, change permission on file to be able to remove later
                 if (getuid() == 0 && userid >= 0)
                 {
-                    savedLogger.logDebug("Changing permissions for pid file: ", path);
+                    savedLogger.logDebug("Changing permissions for pid file: " ~ path);
                     executeShell(text("chown ", userid," ", path.dirName));
                     executeShell(text("chown ", userid," ", path));
                 }

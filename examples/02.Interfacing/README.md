@@ -80,13 +80,13 @@ Daemon description is similar to [Example 01](https://github.com/NCrashed/daemon
         // For windows is important to use absolute path for logging
         version(Windows) string logFilePath = "C:\\logfile.log";
         else string logFilePath = "logfile.log";
-        
-        auto logger = new shared StrictLogger(logFilePath);
-        return buildDaemon!daemon.run(logger); 
+
+        auto logger = new shared DloggLogger(logFilePath);
+        return buildDaemon!daemon.run(logger);
     }
 ```
 
-As custom signals are mapped to native ones at runtime, guessing actuall signal id is a quite
+As custom signals are mapped to native ones at runtime, guessing the actual signal id is a quite
 complicated task (Windows version binds to string names, that is much more repitable). `daemonize`
 provides utilities to control created daemons from D code.
 
