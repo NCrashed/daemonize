@@ -1,0 +1,5 @@
+.dub/
+daemonize-test-default
+dub.selections.json
+libdaemonize.a
+
