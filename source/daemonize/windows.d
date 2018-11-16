@@ -23,7 +23,6 @@ import core.thread;
 import std.string;
 import std.typetuple;
 import std.utf;
-import std.c.stdlib;
 import std.conv : text;
 import std.typecons;
 
